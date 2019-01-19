@@ -14,6 +14,15 @@ library(knitr)
 library(kableExtra)
 library(purrr)
 library(stringr)
+library(readr)
+```
+
+Here, I read data.
+```{r, Reading Data}
+#Reading Data
+datjss <- read_csv("~/Downloads/dat (1) 2/datjss.csv")
+datsss <- read_csv("~/Downloads/dat (1) 2/datsss.csv")
+datstu <- read_csv("~/Downloads/dat (1) 2/datstu.csv")
 ```
 
 Here, I am creating a table function which I will use later to present obtained statistics in a nice format.
@@ -27,14 +36,7 @@ table = function(df, dig, capt){
 }
 ```
 
-Here, I read data.
-```{r, Reading Data}
-#Reading Data
-datjss <- read.csv("datjss.csv", header = T, na.strings = c("", "NA"))
-datstu <- read.csv("datstu.csv", header = T, na.strings = c("", "NA"))
-datsss <- read.csv("datsss.csv", header = T)
-```
-
+## Exercise 1
 
 ```{r, Exercise 1}
 #Number of School
@@ -114,9 +116,13 @@ colnames(Exercise1_df) = c("Num of Student", "Num of School", "Num of Programs",
 table(Exercise1_df, 4, "Summary Table")
 ```
 
+## Exercise 2
+
 ```{r, Exercise 2}
 
 ```
+
+## Exercise 3
 
 ```{r, Exericse 3}
 dist = function(sss, jss){
@@ -125,3 +131,4 @@ dist = function(sss, jss){
 }
 ```
 
+## Exercise 4
