@@ -1,0 +1,127 @@
+---
+title: 'ECON-613 HW #1'
+author: "Min Chul Kim"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+Here, I am calling all the packages I am going to use in this assignment.
+```{r, Libraries, include = FALSE}
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(purrr)
+library(stringr)
+```
+
+Here, I am creating a table function which I will use later to present obtained statistics in a nice format.
+```{r}
+table = function(df, dig, capt){
+  kable(df, 
+        digits = dig, 
+        booktabs = TRUE, 
+        caption = capt
+        ) 
+}
+```
+
+Here, I read data.
+```{r, Reading Data}
+#Reading Data
+datjss <- read.csv("datjss.csv", header = T, na.strings = c("", "NA"))
+datstu <- read.csv("datstu.csv", header = T, na.strings = c("", "NA"))
+datsss <- read.csv("datsss.csv", header = T)
+```
+
+
+```{r, Exercise 1}
+#Number of School
+School_Num = datstu[, paste("schoolcode", 1:6, sep = "")] %>%
+  unlist() %>%
+  unique() %>% 
+  na.omit() %>%
+  sort() %>%
+  length()
+
+#Number of Program
+Programs_Num = datstu[, paste("choicepgm", 1:6, sep = "")] %>%
+  na.omit() %>%
+  unlist() %>%
+  unique() %>%
+  length()
+
+#Number of Choices
+
+Total_Choices = data.frame(
+  Choices1 = paste(School$schoolcode1, Choices$choicepgm1),
+  Choices2 = paste(School$schoolcode2, Choices$choicepgm2),
+  Choices3 = paste(School$schoolcode3, Choices$choicepgm3),
+  Choices4 = paste(School$schoolcode4, Choices$choicepgm4),
+  Choices5 = paste(School$schoolcode1, Choices$choicepgm5),
+  Choices6 = paste(School$schoolcode1, Choices$choicepgm6)
+) %>%
+  unlist() %>%
+  unique() %>%
+  na.omit() %>%
+  length()
+
+#Missing Data
+Missing_Test = datstu$score %>% 
+  summary() %>%
+  .["NA's"] %>%
+  as.integer()
+  
+#Apply to the Same School
+School = datstu[, paste("schoolcode", 1:6, sep = "")] %>%
+  as.data.frame()
+
+No_NA_School = apply(School, 1, FUN = na.omit) %>%
+  map(length) %>%
+  unlist() 
+
+Num_School_Applied = apply(School, 1, FUN = unique) %>%
+  map(na.omit) %>%
+  map(length) %>%
+  unlist()
+
+Same_School = ifelse(Num_School_Applied < No_NA_School, "Yes", "No") %>%
+  as.data.frame()
+
+#Apply to less than 6 Choices
+Choices = datstu[, paste("choicepgm", 1:6, sep = "")] 
+
+Num_Choices_Applied = apply(Choices, 1, na.omit) %>%
+  map(length) %>%
+  unlist() 
+
+Less_Choices = ifelse(Num_Choices_Applied < 6, "Yes", "No") %>%
+  as.data.frame()
+colnames(Less_Choices) = "Apply to less than 6 programs?"
+
+#Summary of Number of Students, Number of Schools, Number of Programs
+Exercise1_df = data_frame(
+  nrow(datstu),
+  School_Num,
+  Programs_Num,
+  Total_Choices,
+  Missing_Test
+)
+colnames(Exercise1_df) = c("Num of Student", "Num of School", "Num of Programs",
+                           "Number of Choices", "Missing Test Score")
+
+table(Exercise1_df, 4, "Summary Table")
+```
+
+```{r, Exercise 2}
+
+```
+
+```{r, Exericse 3}
+dist = function(sss, jss){
+  sqrt( (69.172 * (datsss$ssslong - datjss$point_x) * cos(datjss$point_y / 57.3))^2 +
+          (69.172 *(datsss$ssslat - datjss$point_y))^2 )
+}
+```
+
