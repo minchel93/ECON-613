@@ -15,6 +15,7 @@ library(kableExtra)
 library(purrr)
 library(stringr)
 library(readr)
+library(tidyr)
 ```
 
 Here, I read data.
@@ -42,19 +43,20 @@ table = function(df, dig, capt){
 #Number of School
 School_Num = datstu[, paste("schoolcode", 1:6, sep = "")] %>%
   unlist() %>%
-  unique() %>% 
+  unique() %>%
   na.omit() %>%
-  sort() %>%
   length()
 
 #Number of Program
 Programs_Num = datstu[, paste("choicepgm", 1:6, sep = "")] %>%
-  na.omit() %>%
   unlist() %>%
   unique() %>%
+  na.omit() %>%
   length()
 
 #Number of Choices
+School = datstu[, paste("schoolcode", 1:6, sep = "")]
+Choices = datstu[, paste("choicepgm", 1:6, sep = "")] 
 
 Total_Choices = data.frame(
   Choices1 = paste(School$schoolcode1, Choices$choicepgm1),
@@ -76,9 +78,6 @@ Missing_Test = datstu$score %>%
   as.integer()
   
 #Apply to the Same School
-School = datstu[, paste("schoolcode", 1:6, sep = "")] %>%
-  as.data.frame()
-
 No_NA_School = apply(School, 1, FUN = na.omit) %>%
   map(length) %>%
   unlist() 
@@ -92,8 +91,6 @@ Same_School = ifelse(Num_School_Applied < No_NA_School, "Yes", "No") %>%
   as.data.frame()
 
 #Apply to less than 6 Choices
-Choices = datstu[, paste("choicepgm", 1:6, sep = "")] 
-
 Num_Choices_Applied = apply(Choices, 1, na.omit) %>%
   map(length) %>%
   unlist() 
@@ -102,7 +99,7 @@ Less_Choices = ifelse(Num_Choices_Applied < 6, "Yes", "No") %>%
   as.data.frame()
 colnames(Less_Choices) = "Apply to less than 6 programs?"
 
-#Summary of Number of Students, Number of Schools, Number of Programs
+#Dataframe of Number of Students, Number of Schools, Number of Programs, etc.
 Exercise1_df = data_frame(
   nrow(datstu),
   School_Num,
@@ -113,22 +110,149 @@ Exercise1_df = data_frame(
 colnames(Exercise1_df) = c("Num of Student", "Num of School", "Num of Programs",
                            "Number of Choices", "Missing Test Score")
 
-table(Exercise1_df, 4, "Summary Table")
+#Summary Tables
+table(Exercise1_df, 4, 
+      "Summary Table of Statistics Other Than Same School and Less than 6 Choices")
+table(Same_School, 4, "Table of Apply to the Same School")
+table(Less_Choices, 4, "Table of Apply to less than 6 Choices")
 ```
 
 ## Exercise 2
 
 ```{r, Exercise 2}
+School_Level_Dataset = data.frame(
+  Choices1 = paste(School$schoolcode1, Choices$choicepgm1, sep = "_"),
+  Choices2 = paste(School$schoolcode2, Choices$choicepgm2, sep = "_"),
+  Choices3 = paste(School$schoolcode3, Choices$choicepgm3, sep = "_"),
+  Choices4 = paste(School$schoolcode4, Choices$choicepgm4, sep = "_"),
+  Choices5 = paste(School$schoolcode1, Choices$choicepgm5, sep = "_"),
+  Choices6 = paste(School$schoolcode1, Choices$choicepgm6, sep = "_")
+) %>%
+  unlist() %>%
+  unique() %>%
+  na.omit() %>% 
+  as.data.frame()
+colnames(School_Level_Dataset) = "School_Programs"
+
+School_and_Program = School_Level_Dataset %>% 
+  separate(School_Programs, c("School", "Program"), "_")
+
+catalog = datsss %>% group_by(schoolcode) %>% 
+  select(schoolcode, sssdistrict, ssslat, ssslong) %>% 
+  unique() %>% na.omit() %>% arrange(schoolcode) %>% as.data.frame() 
+
+codes = dist = lat = long = rep(NA, nrow(School_Level_Dataset))
+for(i in 1:nrow(School_Level_Dataset)){
+  
+  codes[i] = School_and_Program[, "School"][i] 
+  
+  dist[i] = catalog %>% filter(schoolcode == codes[i]) %>% select(sssdistrict)
+  lat[i] = catalog %>% filter(schoolcode == codes[i]) %>% select(ssslat)
+  long[i] = catalog %>% filter(schoolcode == codes[i]) %>% select(ssslong)
+}
+
+datstu2 = datstu %>%
+  mutate(
+  SchoolProgram1 = paste(School$schoolcode1, 
+                         Choices$choicepgm1, sep = "_") %>% as.character(),
+  SchoolProgram2 = paste(School$schoolcode2, 
+                         Choices$choicepgm2, sep = "_") %>% as.character(),
+  SchoolProgram3 = paste(School$schoolcode3, 
+                         Choices$choicepgm3, sep = "_") %>% as.character(),
+  SchoolProgram4 = paste(School$schoolcode4, 
+                         Choices$choicepgm4, sep = "_") %>% as.character(),
+  SchoolProgram5 = paste(School$schoolcode1, 
+                         Choices$choicepgm5, sep = "_") %>% as.character(),
+  SchoolProgram6 = paste(School$schoolcode1, 
+                         Choices$choicepgm6, sep = "_") %>% as.character()
+  )
+
+is_not_integer0 = function(x){
+  if(!identical(x, integer(0))){
+    return(TRUE)
+  } else{
+    return(FALSE)
+  }
+}
+
+code = mini = avg = admit = rep(NA, nrow(School_Level_Dataset))
+for(i in 1:nrow(School_Level_Dataset)){
+  
+  code[i] = School_Level_Dataset[,"School_Programs"][i] %>% as.character()
+  
+  mini[i] = datstu2 %>%
+    filter(code[i] == SchoolProgram1 |
+            code[i] == SchoolProgram2 |
+            code[i] == SchoolProgram3 |
+            code[i] == SchoolProgram4 |
+            code[i] == SchoolProgram5 |
+            code[i] == SchoolProgram6) %>% 
+    select(score) %>% na.omit() %>% map(as.integer) %>% 
+    map_if(is_not_integer0, min) %>% ifelse(. == "integer(0)", NA, .)
+    
+  avg[i] = datstu2 %>%
+    filter(code[i] == SchoolProgram1 |
+            code[i] == SchoolProgram2 |
+            code[i] == SchoolProgram3 |
+            code[i] == SchoolProgram4 |
+            code[i] == SchoolProgram5 |
+            code[i] == SchoolProgram6) %>% 
+    select(score) %>% na.omit() %>% map(as.integer) %>% 
+    map_if(is_not_integer0, mean) %>% ifelse(. == "integer(0)", NA, .)
+  
+  admit[i] = datstu2 %>%
+    filter(code[i] == SchoolProgram1 |
+            code[i] == SchoolProgram2 |
+            code[i] == SchoolProgram3 |
+            code[i] == SchoolProgram4 |
+            code[i] == SchoolProgram5 |
+            code[i] == SchoolProgram6) %>% 
+    nrow() %>% map(as.integer)
+}
+
+
+School_Level_Dataset = School_Level_Dataset %>%
+  mutate(
+    schoolcode = School_and_Program[,"School"],
+    program = School_and_Program[,"Program"],
+    district = dist,
+    latitude = lat, 
+    longitude = long,
+    cutoff = mini,
+    quality = avg,
+    size = admit
+  ) %>% 
+  arrange(schoolcode) %>%
+  select(-c(schoolcode, program))
+
+
+
 
 ```
 
 ## Exercise 3
 
 ```{r, Exericse 3}
-dist = function(sss, jss){
-  sqrt( (69.172 * (datsss$ssslong - datjss$point_x) * cos(datjss$point_y / 57.3))^2 +
-          (69.172 *(datsss$ssslat - datjss$point_y))^2 )
+dist = function(i, j){
+  return(sqrt( (69.172 * (datsss$ssslong[j] - datjss$point_x[i]) * 
+           cos(datjss$point_y[i] / 57.3))^2 +
+          ( 69.172 *(datsss$ssslat[j] - datjss$point_y[i]))^2 ))
 }
+
+dist_df = data.frame(
+  rep( seq(datjss$X1) , each = length(datsss$X1) ),
+  rep( seq(datsss$X1), length(datjss$X1) ),
+  NA,
+  rep( datjss$jssdistrict, each = length(datsss$X1) ),
+  rep( datsss$sssdistrict, length(datjss$X1) )
+)
+colnames(dist_df) =
+  c("jss_index", "sss_index", "Distance", "jss District", "sss District")
+
+dist_df$Distance = map2(dist_df[, 1], dist_df[, 2], dist)
+
+dist_df = dist_df %>%
+  select("jss District", "sss District", "Distance")
 ```
 
 ## Exercise 4
