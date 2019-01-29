@@ -7,7 +7,7 @@ output:
   html_document: default
 ---
 
-Here, I am calling all the packages I am going to use in this assignment.
+
 ```{r, Libraries, include = FALSE}
 library(plyr)
 library(dplyr)
@@ -19,7 +19,7 @@ library(readr)
 library(tidyr)
 ```
 
-Here, I read data.
+Here, I am reading in the data.
 ```{r, Reading Data}
 #Reading Data
 datjss <- read.csv("datjss.csv")
@@ -27,22 +27,15 @@ datsss <- read.csv("datsss.csv")
 datstu <- read.csv("datstu.csv")
 ```
 
-Here, I am creating a table function which I will use later to present obtained statistics in a nice format.
-```{r}
-table = function(df, dig, capt){
-  kable(df, 
-        digits = dig, 
-        booktabs = TRUE, 
-        caption = capt
-        ) 
-}
-```
+## Note
+
+For each exercise, I am going to present 20 lines of table, if the table contains more than 20 rows. This is to prevent the assignment from being overly populated with the outputs. If more than 20 rows are needed, please run the codes provided in the R chunks. 
 
 ## Exercise 1
 
-```{r, Exercise 1}
-datstu = na.omit(datstu, col = c("score", "rankplace"))
+In this exercise, I report the seven statistics in three tables. The first four are in one table. The other two are presented in two tables.
 
+```{r, Exercise 1, warning = FALSE}
 #Number of School
 School_Num = datstu[, paste("schoolcode", 1:6, sep = "")] %>%
   unlist() %>%
@@ -92,6 +85,8 @@ Num_School_Applied = apply(School, 1, FUN = unique) %>%
 
 Same_School = ifelse(Num_School_Applied < No_NA_School, "Yes", "No") %>%
   as.data.frame()
+Same_School = cbind(seq(1, nrow(Same_School), by = 1), Same_School)
+colnames(Same_School) = c("Index", "Apply to the Same School?")
 
 #Apply to less than 6 Choices
 Num_Choices_Applied = apply(Choices, 1, na.omit) %>%
@@ -113,16 +108,23 @@ Exercise1_df = data_frame(
 colnames(Exercise1_df) = c("Num of Student", "Num of School", "Num of Programs",
                            "Number of Choices", "Missing Test Score")
 
+kable(head(Exercise1_df, 20), format = "markdown")
+kable(head(Same_School, 20), format = "markdown")
+kable(head(Less_Choices, 20), format = "markdown")
+
 #Summary Tables
 #table(Exercise1_df, 4, 
 #      "Summary Table of Statistics Other Than Same School and Less than 6 Choices")
 #table(Same_School, 4, "Table of Apply to the Same School")
-#table(Less_Choices, 4, "Table of Apply to less than 6 Choices")
+#kable(Less_Choices, digits = 4, caption = "Table of Apply to less than 6 Choices")
 ```
 
 ## Exercise 2
 
-```{r, Exercise 2}
+In this problem, I present the six variables in two tables. 
+
+```{r, Exercise 2, warning = FALSE}
+datstu = na.omit(datstu, col = c("score", "rankplace"))
 datstu2 = datstu %>%
   mutate(
     choice1 = paste(schoolcode1, choicepgm1, sep = "_"),
@@ -259,11 +261,19 @@ catalog = datsss %>%
 
 catalog$schoolcode = catalog$schoolcode %>% as.character()
 School_Level_Dataset = full_join(School_Level_Dataset, catalog, by = "schoolcode")
+
+kable(head(School_Level_Dataset[, 1:5], 20), format = "markdown")
+kable(head(School_Level_Dataset[, 6:9], 20), format = "markdown")
+
+#kable(School_Level_Dataset[, 1:5], 4, "Table of School Level Dataset First Five Columns")
+#kable(School_Level_Dataset[, 6:10], 4, "Table of School Level Dataset Last Five Columns")
 ```
 
 ## Exercise 3
 
-```{r Exericse 3}
+Using the supplied formula, I present a table of calculated distances.
+
+```{r Exericse 3, warning = FALSE}
 distance = c()
 distance_list = list()
 
@@ -316,11 +326,17 @@ dist_df = dist_df %>%
   ) %>%
   select(jssdistrict, schoolcode1, distance1, schoolcode2, distance2, schoolcode3, distance3,
          schoolcode4, distance4, schoolcode5, distance5, schoolcode6, distance6)
+
+kable(head(dist_df[, seq(3, 13, by = 2)], 20), format = "markdown")
+
+#kable(dist_df[, seq(3,13, by = 2)], digits = 4, "Table of Distances")
 ```
 
 ## Exercise 4
 
-```{r Exercise 4}
+Six tables are presented here, reporting average, sd, and test score quantiles, of each variable.
+
+```{r Exercise 4, warning = FALSE}
 mean_cutoff = function(i, var){
   return(datstu2 %>% 
            filter(rankplace == i) %>% 
@@ -439,9 +455,17 @@ distance_stats = data.frame(
   )
 )
 colnames(distance_stats) = c("mean", "sd")
+
+kable(head(cutoff_stats, 20), format = "markdown")
+kable(head(quality_stats, 20), format = "markdown")
+kable(head(distance_stats, 20), format = "markdown")
+
+#table(cutoff_stats, 4, "Table of Cutoff")
+#table(quality_stats, 4, "Table of Quality")
+#table(distance_stats, 4, "Table of Distance")
 ```
 
-```{r}
+```{r, warning = FALSE}
 quan_cutoff = function(i, var){
   temp = datstu2 %>% 
     filter(rankplace == i) %>% 
@@ -514,7 +538,130 @@ quantile_distance_df = data.frame(
   quan_distance(6, "schoolcode6", "distance6")
 )
 colnames(quantile_distance_df) = paste("rankchoice", 1:6, sep = "")
+
+kable(head(quantile_cutoff_df, 20), format = "markdown")
+kable(head(quantile_quality_df, 20), format = "markdown")
+kable(head(quantile_distance_df, 20), format = "markdown")
+
+#table(quantile_cutoff_df, 4, "Table of Cutoff Differentiated by Test Score Quantiles")
+#table(quantile_quality_df, 4, "Table of Quality Differentiated by Test Score Quantiles")
+#table(quantile_distance_df, 4, 
+#      "Table of Distance Differentiated by Test Score Quantiles")
 ```
 
+## Exericise 5
 
+Two tables are presented here. One is with decile; the other is with quantile.
+
+```{r, warning = FALSE}
+School_Level_Dataset2 = School_Level_Dataset %>%
+  mutate(decile = ntile(cutoff, 10))
+
+application_groups = function(var, var2){
+  
+  return(
+    datstu2 %>%
+      left_join(School_Level_Dataset2, by = var) %>%
+      select(!!enquo(var2), decile)
+  )
+}
+
+application_df = data.frame(
+  application_groups(c("choice1" = "School_Programs"), choice1),
+  application_groups(c("choice2" = "School_Programs"), choice2),
+  application_groups(c("choice3" = "School_Programs"), choice3),
+  application_groups(c("choice4" = "School_Programs"), choice4),
+  application_groups(c("choice5" = "School_Programs"), choice5),
+  application_groups(c("choice6" = "School_Programs"), choice6)
+)
+colnames(application_df) = c("choice1", "decile1", "choice2", "decile2",
+                             "choice3", "decile3", "choice4", "decile4", 
+                             "choice5", "decile5", "choice6", "decile6"
+                             )
+
+application_df = application_df %>% 
+  select(choice1, choice2, choice3, choice4, choice5, choice6, 
+         decile1, decile2, decile3, decile4, decile5, decile6)
+
+application_count_df = 
+  apply(application_df[, 7:12], 1, FUN = unique) %>% 
+  map(na.omit) %>% 
+  map(length) %>% 
+  unlist() %>% 
+  as.data.frame()
+colnames(application_count_df) = "Number of Groups"
+
+application_df = cbind(application_df, application_count_df)
+
+kable(head(application_count_df, 20), format = "markdown")
+
+#table(application_count_df, 4, "Table of the Number of Groups in the Application")
+```
+
+```{r, warning = FALSE}
+School_Level_Dataset3 = School_Level_Dataset2
+
+student_quantile_score = quantile(datstu2$score, seq(0, 1, by = 0.25)) %>% 
+  as.integer()
+
+application_quantile = function(var, var2){
+  quantile = c()
+  
+  for(i in 1:2293){
+  if(var2[1] < var[i] & var[i] < var2[2]){
+    quantile[i] = 1
+  } else if(var2[2] < var[i] & var[i] < var2[3]){
+    quantile[i] = 2
+  } else if(var2[3] < var[i] & var[i] < var2[4]){
+    quantile[i] = 3
+  } else{
+    quantile[i] = 4
+  }
+  }
+  return(quantile)
+}
+
+quantiles = application_quantile(School_Level_Dataset3$cutoff, student_quantile_score)
+quantiles = c(quantiles, rep(NA, dim(School_Level_Dataset3)[1] - length(quantiles)))
+
+School_Level_Dataset3 = cbind(School_Level_Dataset3, quantiles)
+
+application_groups = function(var, var2){
+  return(
+    datstu2 %>%
+      left_join(School_Level_Dataset3, by = var) %>%
+      select(!!enquo(var2), quantiles)
+  )
+}
+
+application_df2 = data.frame(
+  application_groups(c("choice1" = "School_Programs"), choice1),
+  application_groups(c("choice2" = "School_Programs"), choice2),
+  application_groups(c("choice3" = "School_Programs"), choice3),
+  application_groups(c("choice4" = "School_Programs"), choice4),
+  application_groups(c("choice5" = "School_Programs"), choice5),
+  application_groups(c("choice6" = "School_Programs"), choice6)
+)
+colnames(application_df2) = c("choice1", "quant1", "choice2", "quant2",
+                             "choice3", "quant3", "choice4", "quant4", 
+                             "choice5", "quant5", "choice6", "quant6")
+
+application_df2 = application_df2 %>% 
+  select(choice1, choice2, choice3, choice4, choice5, choice6, 
+         quant1, quant2, quant3, quant4, quant5, quant6)
+
+application_count_df2 = 
+  apply(application_df2[, 7:12], 1, FUN = unique) %>% 
+  map(na.omit) %>% 
+  map(length) %>% 
+  unlist() %>% 
+  as.data.frame()
+colnames(application_count_df2) = "Number of Groups"
+
+application_df2 = cbind(application_df2, application_count_df2)
+
+kable(head(application_count_df2, 20), format = "markdown")
+
+#table(application_count_df2, 4, "Table of the Number of Groups in the Application")
+```
 
