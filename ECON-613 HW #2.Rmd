@@ -1,0 +1,182 @@
+---
+title: 'ECON-613 HW #2'
+author: "Min Chul Kim"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, include = FALSE}
+library(plyr)
+library(dplyr)
+library(knitr)
+library(purrr)
+```
+
+# Exercise1
+
+```{r}
+#Set Seed
+set.seed(1)
+
+#Drawing Samples from Distributions
+n = 10000
+
+X1 = runif(n, min = 1, max = 3)
+X2 = rgamma(n, shape = 3, scale = 2)
+X3 = rbinom(n, size = 1, prob = 0.3)
+eps = rnorm(n, mean = 2, sd = 1)
+
+#Creating Y and Dummy Y Variables
+Y = 0.5 + 1.2*X1 - 0.9*X2 + 0.1*X3 + eps
+ydum = ifelse(Y > mean(Y), 1, 0)
+```
+
+# Exercise2
+
+```{r}
+#Calculating the Correlation between Y and X1, How Different is it from 1.2
+correlation = cor(Y, X1)
+difference_corr = abs(cor(Y, X1) - 1.2) %>% as.data.frame
+colnames(difference_corr) = "Difference of Correlation from 1.2"
+
+kable(difference_corr, digits = 4, format = "markdown")
+
+#Regression
+X = data.frame(
+  1,
+  X1,
+  X2,
+  X3
+) %>% 
+  as.matrix()
+
+#Calculating the Regression of Y on X
+reg1 = lm(Y ~ X1 + X2 + X3)
+
+#Calculating the Coefficients of this Regression
+reg1_coef = solve((t(X) %*% X)) %*% t(X) %*% Y
+
+df_reg1_coef = reg1_coef %>% as.data.frame
+colnames(df_reg1_coef) = "Coefficients of Reg"
+
+kable(df_reg1_coef, digits = 4, 
+      format = "markdown", caption = "Coefficients of Regression")
+
+#Caluclating the Standard Errors Using Standard Formula
+k = length(reg1_coef)
+est_var = sum( (Y - (X %*% reg1_coef))^2 ) / (n - k)
+est_std = sqrt(est_var)
+
+df_est_std = est_std %>% as.data.frame
+colnames(df_est_std) = "SE from Standard Formula"
+
+kable(df_est_std, digits = 4, 
+      format = "markdown", caption = "SE from Standard Formula")
+
+#Bootstrap n = 49
+boot_x1 = boot_x2 = boot_x3 = boot_eps = rep(NA, n)
+boot_Y = list()
+boot_coef = list()
+
+for(i in 1:49){
+  
+  boot_x1 = sample(X1, n, replace = TRUE)
+  boot_x2 = sample(X2, n, replace = TRUE)
+  boot_x3 = sample(X3, n, replace = TRUE)
+  boot_eps = sample(eps, n , replace = TRUE)
+  
+  boot_Y = 0.5 + 1.2*boot_x1 - 0.9*boot_x2 + 0.1*boot_x3 + boot_eps
+  boot_X = cbind(1, boot_x1, boot_x2, boot_x3)
+  
+  boot_coef[[i]] = solve((t(boot_X) %*% boot_X)) %*% t(boot_X) %*% boot_Y
+}
+
+#Making Bootstrap Values into a Dataframe
+boot_temp_df = map(boot_coef, data.frame)
+boot_coef_df = do.call("cbind", boot_temp_df)
+colnames(boot_coef_df) = paste("sample", 1:49, sep = "")
+
+#Calculating SE
+bootstrap_se1 = apply(boot_coef_df, 1, FUN = sd) %>% as.data.frame()
+colnames(bootstrap_se1) = "SE of Bootstrap 49"
+rownames(bootstrap_se1) = c("Int", "X1", "X2", "X3")
+kable(bootstrap_se1, digits = 4, format = "markdown")
+
+#Bootstrap n = 499
+boot_x1 = boot_x2 = boot_x3 = boot_eps = rep(NA, n)
+boot_Y = list()
+boot_coef = list()
+
+for(i in 1:499){
+  
+  boot_x1 = sample(X1, n, replace = TRUE)
+  boot_x2 = sample(X2, n, replace = TRUE)
+  boot_x3 = sample(X3, n, replace = TRUE)
+  boot_eps = sample(eps, n , replace = TRUE)
+  
+  boot_Y = 0.5 + 1.2*boot_x1 - 0.9*boot_x2 + 0.1*boot_x3 + boot_eps
+  boot_X = cbind(1, boot_x1, boot_x2, boot_x3)
+  
+  boot_coef[[i]] = solve((t(boot_X) %*% boot_X)) %*% t(boot_X) %*% boot_Y
+}
+
+#Making Bootstrap Values into a Dataframe
+boot_temp_df = map(boot_coef, data.frame)
+boot_coef_df = do.call("cbind", boot_temp_df)
+colnames(boot_coef_df) = paste("sample", 1:499, sep = "")
+
+#Calculating SE
+bootstrap_se1 = apply(boot_coef_df, 1, FUN = sd) %>% as.data.frame()
+colnames(bootstrap_se1) = "SE of Bootstrap 499"
+rownames(bootstrap_se1) = c("Int", "X1", "X2", "X3")
+kable(bootstrap_se1, digits = 4, format = "markdown")
+```
+
+# Exercise3
+
+In the following R chunk, I created ordinary likelihood function, as well as log likelihood function. For the ordinary likelihood function, expect $0$ for the answer, since probabilities less than or equal to 1 are being multiplied for $10000$ times. 
+
+```{r}
+#Creating Likelihood Function
+probit_likelihood = function(x, beta, ydum){
+  
+  #Calculating XB
+  X_Beta = x %*% beta
+  
+  #Calculating Phi(XB)
+  phi = map(X_Beta, pnorm) %>% unlist()
+  
+  #Calculating the Likelihood Using Likelihood Formula
+  prob = phi^(ydum) * (1 - phi)^(1 - ydum)
+  likelihood = prod( prob )
+  
+  return(likelihood)
+}
+
+#The following will be 0 since probabilities <= 1 are being multiplied.
+probit_likelihood(X, reg1_coef, ydum) 
+
+#Creating Log Likelihood Function
+pro_log_likelihood = function(x, beta, ydum){
+  
+  #Calculating XB
+  X_Beta = x %*% beta
+  
+  #Calculating Phi(XB)
+  phi = map(X_Beta, pnorm) %>% unlist()
+  
+  #Calculating the Log Likelihood Using the Formula
+  log_prob = ydum * log(phi) + (1 - ydum) * log(1 - phi)
+  log_likelihood = sum(log_prob)
+  
+  return(log_likelihood)
+}
+
+pro_log_likelihood(X, reg1_coef, ydum)
+
+
+```
+
+
