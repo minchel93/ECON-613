@@ -39,7 +39,7 @@ ydum = ifelse(Y > mean(Y), 1, 0)
 #Calculating the Correlation between Y and X1, How Different is it from 1.2
 correlation = cor(Y, X1)
 difference_corr = abs(cor(Y, X1) - 1.2) %>% as.data.frame
-colnames(difference_corr) = "Difference of Correlation from 1.2"
+colnames(difference_corr) = "Difference between Correlation and 1.2"
 
 kable(difference_corr, digits = 4, format = "markdown")
 
@@ -67,7 +67,9 @@ kable(df_reg1_coef, digits = 4,
 #Caluclating the Standard Errors Using Standard Formula
 k = length(reg1_coef)
 est_var = sum( (Y - (X %*% reg1_coef))^2 ) / (n - k)
-est_std = sqrt(est_var)
+est_std = est_var * solve( (t(X) %*% X) ) %>%
+  diag() %>% 
+  sqrt()
 
 df_est_std = est_std %>% as.data.frame
 colnames(df_est_std) = "SE from Standard Formula"
@@ -85,10 +87,9 @@ for(i in 1:49){
   boot_x1 = sample(X1, n, replace = TRUE)
   boot_x2 = sample(X2, n, replace = TRUE)
   boot_x3 = sample(X3, n, replace = TRUE)
-  boot_eps = sample(eps, n , replace = TRUE)
-  
-  boot_Y = 0.5 + 1.2*boot_x1 - 0.9*boot_x2 + 0.1*boot_x3 + boot_eps
+
   boot_X = cbind(1, boot_x1, boot_x2, boot_x3)
+  boot_Y = sample(Y, n, replace = TRUE)
   
   boot_coef[[i]] = solve((t(boot_X) %*% boot_X)) %*% t(boot_X) %*% boot_Y
 }
@@ -114,10 +115,9 @@ for(i in 1:499){
   boot_x1 = sample(X1, n, replace = TRUE)
   boot_x2 = sample(X2, n, replace = TRUE)
   boot_x3 = sample(X3, n, replace = TRUE)
-  boot_eps = sample(eps, n , replace = TRUE)
   
-  boot_Y = 0.5 + 1.2*boot_x1 - 0.9*boot_x2 + 0.1*boot_x3 + boot_eps
   boot_X = cbind(1, boot_x1, boot_x2, boot_x3)
+  boot_Y = sample(Y, n, replace = TRUE)
   
   boot_coef[[i]] = solve((t(boot_X) %*% boot_X)) %*% t(boot_X) %*% boot_Y
 }
@@ -132,6 +132,7 @@ bootstrap_se1 = apply(boot_coef_df, 1, FUN = sd) %>% as.data.frame()
 colnames(bootstrap_se1) = "SE of Bootstrap 499"
 rownames(bootstrap_se1) = c("Int", "X1", "X2", "X3")
 kable(bootstrap_se1, digits = 4, format = "markdown")
+
 ```
 
 # Exercise3
@@ -156,7 +157,12 @@ probit_likelihood = function(x, beta, ydum){
 }
 
 #The following will be 0 since probabilities <= 1 are being multiplied.
-probit_likelihood(X, reg1_coef, ydum) 
+pro_df = data.frame(
+  probit_likelihood(X, reg1_coef, ydum) 
+)
+colnames(pro_df) = "Probit Likelihood"
+
+kable(pro_df, digits = 4, format = "markdown")
 
 #Creating Log Likelihood Function
 pro_log_likelihood = function(x, beta, ydum){
@@ -164,19 +170,256 @@ pro_log_likelihood = function(x, beta, ydum){
   #Calculating XB
   X_Beta = x %*% beta
   
-  #Calculating Phi(XB)
+  #Calculating Phi(XB) and Preventing the Obtained Results from Being 0 and 1
   phi = map(X_Beta, pnorm) %>% unlist()
+  phi[phi < 0.0001] = 0.0001
+  phi[phi > 0.99] = 0.99 
   
   #Calculating the Log Likelihood Using the Formula
-  log_prob = ydum * log(phi) + (1 - ydum) * log(1 - phi)
-  log_likelihood = sum(log_prob)
+  log_likelihood =  sum( ydum * log(phi) + (1 - ydum) * log((1 - phi)) )
   
-  return(log_likelihood)
+  return(-log_likelihood)
 }
 
-pro_log_likelihood(X, reg1_coef, ydum)
+pro_log_df = data.frame(
+  pro_log_likelihood(X, reg1_coef, ydum)
+)
+colnames(pro_log_df) = "Probit Log Likelihood"
 
+kable(pro_log_df, digits = 4, format = "markdown")
+
+#Steepest Ascent Function
+steepest_ascent = 
+  function(x, betas_old, h, ydum_, learning_rate, epsilon){
+  
+  #Initial Values (betas_new is initialized to start the while loop)
+  sum_sq_betas_diff = 10
+  betas_new = rep(0.5, 4)
+  
+  while( sum_sq_betas_diff > epsilon ){
+  
+    #Computing Matrices to Be Used in Derivative
+    betas_old_matrix = matrix(betas_old, nrow = 4, ncol = 4)
+    betas_new_matrix = betas_old_matrix + h * diag(1, nrow = 4, ncol = 4)
+    
+    #Calculating Partial Derivatives of Log Likelihood
+    derivative = c()
+    for(i in 1:4){
+      derivative[i] = ( pro_log_likelihood(x, betas_new_matrix[i,], ydum_) - 
+                        pro_log_likelihood(x, betas_old_matrix[i,], ydum_) ) / h
+    }
+    
+    #Updating Betas
+    betas_old = betas_new
+    betas_new = betas_old - learning_rate * derivative
+    
+    #Calculating sum_betas_diff
+    sum_sq_betas_diff = sum((betas_new - betas_old)^2)
+    
+  }
+  
+  return(betas_new)
+}
+
+#Implementing Steepest Ascent
+betas = rep(0.5, 4)
+
+steepest_ascent(X, betas_old = betas,
+                h = 10^(-6), ydum, learning_rate = 0.000001, epsilon = .00000001)
 
 ```
 
+# Exercise 4
+
+```{r, warning = FALSE}
+##Writing and Optimizing Linear Probability Model
+linear_reg = lm(ydum ~ X1 + X2 + X3)
+
+dat = data.frame(
+  X, 
+  ydum
+)
+colnames(dat) = c("Int", "X1", "X2", "X3", "Y")
+
+#RSS to Minimize Using Optim Function
+min_RSS = function(data, par){
+  with(data, sum( (par[1] + par[2] * X1 + par[3] * X2 + par[4] * X3 - ydum)^2 ))
+}
+
+linear_coef_df = data.frame(
+  optim(par = c(0, 1, 1, 1), min_RSS, data = dat)$par,
+  linear_reg$coefficients
+)
+colnames(linear_coef_df) = c("Optim Linear Function", "lm Linear Function")
+
+kable(linear_coef_df, digits = 4, format = "markdown")
+
+##Writing and Optimizing Logit Model
+logit_reg = glm(ydum ~ X1 + X2 + X3, family = binomial(link = "logit"))
+
+sigmoid = function(x){
+  return( 1 / (1 + exp(-x)) )
+}
+
+logit_cost_function = function(par){
+  
+  len = length(X)
+  g = sigmoid(X %*% par)
+  C = -(1 / len) * sum( ydum * log(g) + (1 - ydum) * log(1 - g)) 
+  return(C)
+  
+}
+
+initial_par = rep(0, ncol(X))
+
+logit_coef_df = data.frame(
+  optim(par = initial_par, fn = logit_cost_function)$par,
+  logit_reg$coefficients
+)
+colnames(logit_coef_df) = c("Optim logit Function", "glm logit Function")
+
+kable(logit_coef_df, digits = 4, format = "markdown")
+
+##Writing and Optimizing Probit Model
+probit_reg = glm(ydum ~ X1 + X2 + X3, family = binomial(link = "probit"))
+
+probit_cost_function = function(par){
+  
+  len = length(X)
+  phi = pnorm(X %*% par)
+  C = -(1 / len) * sum ( ydum * log(phi) + (1 - ydum) * log(1 - phi) )
+  return(C)
+  
+}
+
+probit_coef_df = data.frame(
+optim(par = initial_par, fn = probit_cost_function)$par,
+probit_reg$coefficients
+)
+colnames(probit_coef_df) = c("Optim Probit Function", "glm Probit Function")
+
+kable(probit_coef_df, digits = 4, format = "markdown")
+```
+
+### Interpretation: \newline
+
+Linear Regression: \newline
+
+Values from the optim function and the base package lm function are not different at all, with the maximum difference in coefficients being 0.0025. This maximum quantity can be considered neglegible. \newline
+
+X1: An increase in X1 increases the ydum variable. \newline
+X2: An increase in X2 decreases the ydum variable. \newline
+X3: An increase in X3 increases the ydum variable. \newline
+
+Logistic Regression: \newline
+
+Values from the optim function and the base package glm function are not different at all, with the maximum difference in coefficients being 0.0004. This maximum quantity can be considered neglegible. \newline
+
+X1: An increase in X1 increases the likelihood of ydum = 1. \newline
+X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
+X3: An increase in X3 increases the likelihood of ydum = 1. \newline
+
+Probit Regression: \newline
+
+Values from the optim function and the base package glm function are not different at all, with the maximum difference in coefficients being 0.0007. This maximum quantity can be considered neglegible. \newline
+
+X1: An increase in X1 increases the likelihood of ydum = 1. \newline
+X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
+X3: An increase in X3 increases the likelihood of ydum = 1.
+
+# Exercise 5
+
+```{r}
+#Probit Model Marginal Effects
+probit_x_beta = predict(probit_reg, type = "link")
+probit_pdf = dnorm(probit_x_beta) %>% mean()
+probit_marginal = probit_pdf * probit_reg$coefficients
+
+#logit Model Marginal Effects
+logit_x_beta = predict(logit_reg, type = "link")
+logit_pdf = dlogis(logit_x_beta) %>% mean()
+logit_marginal = logit_pdf * logit_reg$coefficients
+
+#Summary Table
+marginals_df = data.frame(
+  probit_marginal,
+  logit_marginal
+)
+colnames(marginals_df) = c("Probit", "Logit")
+
+kable(marginals_df, digits = 4, format = "markdown")
+
+#Bootstrap for Probit
+boot_probit_coef = list()
+for(i in 1:49){
+  
+  boot_probit_x_beta = sample(probit_x_beta, n, replace = TRUE)
+  boot_probit_pdf = dnorm(boot_probit_x_beta) %>% mean()
+  boot_probit_marginal = boot_probit_pdf * probit_reg$coefficients
+  
+  boot_probit_coef[[i]] = boot_probit_marginal
+  
+}
+
+#Bootstrap for Logit
+boot_logit_coef = list()
+for(i in 1:49){
+  
+  boot_logit_x_beta = sample(logit_x_beta, n, replace = TRUE)
+  boot_logit_pdf = dnorm(boot_logit_x_beta) %>% mean()
+  boot_logit_marginal = boot_logit_pdf * logit_reg$coefficients
+  
+  boot_logit_coef[[i]] = boot_logit_marginal
+  
+}
+
+#Making Bootstrap Values into a Dataframe
+boot_probit_temp_df = map(boot_probit_coef, data.frame)
+boot_probit_coef_df = do.call("cbind", boot_probit_temp_df)
+colnames(boot_probit_coef_df) = paste("sample", 1:49, sep = "")
+
+boot_logit_temp_df = map(boot_logit_coef, data.frame)
+boot_logit_coef_df = do.call("cbind", boot_logit_temp_df)
+colnames(boot_logit_coef_df) = paste("sample", 1:49, sep = "")
+
+#Calculating SD for Probit
+bootstrap_probit_sd = apply(boot_probit_coef_df, 1, FUN = sd) %>% as.data.frame()
+colnames(bootstrap_probit_sd) = "Probit SD of Bootstrap 49"
+rownames(bootstrap_probit_sd) = c("Int", "X1", "X2", "X3")
+kable(bootstrap_probit_sd, digits = 4, format = "markdown")
+
+#Calculating SD for Logit
+bootstrap_logit_sd = apply(boot_logit_coef_df, 1, FUN = sd) %>% as.data.frame()
+colnames(bootstrap_logit_sd) = "Logit SD of Bootstrap 49"
+rownames(bootstrap_logit_sd) = c("Int", "X1", "X2", "X3")
+kable(bootstrap_logit_sd, digits = 4, format = "markdown")
+
+#Delta Method
+
+##Computing Covariance Matrix of Probit Regression
+v = vcov(probit_reg)
+
+##Function to be used for Gradient
+g = function(x){
+  
+  probit_pdf = dnorm(X %*% x) %>% mean()
+  probit_marginal = probit_pdf * x
+  
+  return(probit_marginal)
+}
+
+##Gradient
+gradient_g = numDeriv::jacobian(g, probit_reg$coefficients)
+
+##Table of Delta Method SD
+Delta_df = gradient_g %*% 
+  v %*% 
+  t(gradient_g) %>% 
+  diag() %>% 
+  sqrt() %>%
+  as.data.frame()
+colnames(Delta_df) = "Delta Method SD"
+
+kable(Delta_df, digits = 4, format = "markdown")
+```
 
