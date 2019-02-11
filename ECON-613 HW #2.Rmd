@@ -135,7 +135,7 @@ The difference in correlation and 1.2 is about 1. Personally judged, this differ
 
 # Exercise3
 
-In the following R chunk, I create ordinary probit likelihood function, as well as the probit log likelihood function. For the ordinary likelihood function, expect $0$ for the answer, since probabilities less than or equal to 1 are being multiplied for a number of times. For the log likelihood function, expect a positive result, because I am supplying the negative of the computed log likelihood.
+In the following R chunk, I create an ordinary probit likelihood function, as well as the probit log likelihood function. For the ordinary likelihood function, expect $0$ for the answer, since probabilities less than or equal to 1 are being multiplied for a number of times. For the log likelihood function, expect a positive result, because I am supplying the negative of the computed log likelihood.
 
 ```{r}
 #Creating Likelihood Function
@@ -239,6 +239,9 @@ colnames(probit_steepest_df) = c("Steepest Ascent", "True", "Difference")
 
 kable(probit_steepest_df, digits = 4, format = "markdown")
 ```
+
+Answer: \newline
+According to the result, my steepest ascent values are fairly different from the true parameters. The intercept has the biggest difference, and $X3$ has the least difference.
 
 # Exercise 4
 
