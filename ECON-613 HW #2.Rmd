@@ -52,14 +52,12 @@ X = data.frame(
 ) %>% 
   as.matrix()
 
-#Calculating the Regression of Y on X
-reg1 = lm(Y ~ X1 + X2 + X3)
-
 #Calculating the Coefficients of this Regression
 reg1_coef = solve((t(X) %*% X)) %*% t(X) %*% Y
 
 df_reg1_coef = reg1_coef %>% as.data.frame
 colnames(df_reg1_coef) = "Coefficients of Reg"
+rownames(df_reg1_coef) = c("Int", "X1", "X2", "X3")
 
 kable(df_reg1_coef, digits = 4, 
       format = "markdown", caption = "Coefficients of Regression")
@@ -73,13 +71,12 @@ est_std = est_var * solve( (t(X) %*% X) ) %>%
 
 df_est_std = est_std %>% as.data.frame
 colnames(df_est_std) = "SE from Standard Formula"
+rownames(df_est_std) = c("Int", "X1", "X2", "X3")
 
 kable(df_est_std, digits = 4, 
       format = "markdown", caption = "SE from Standard Formula")
 
 #Bootstrap n = 49
-boot_x1 = boot_x2 = boot_x3 = boot_eps = rep(NA, n)
-boot_Y = list()
 boot_coef = list()
 
 for(i in 1:49){
@@ -106,8 +103,6 @@ rownames(bootstrap_se1) = c("Int", "X1", "X2", "X3")
 kable(bootstrap_se1, digits = 4, format = "markdown")
 
 #Bootstrap n = 499
-boot_x1 = boot_x2 = boot_x3 = boot_eps = rep(NA, n)
-boot_Y = list()
 boot_coef = list()
 
 for(i in 1:499){
@@ -135,9 +130,12 @@ kable(bootstrap_se1, digits = 4, format = "markdown")
 
 ```
 
+Answer: \newline
+The difference in correlation and 1.2 is about 1. Personally judged, this difference is significant because it is greater than an arbitrarily chosen value of $0.05$. 
+
 # Exercise3
 
-In the following R chunk, I created ordinary likelihood function, as well as log likelihood function. For the ordinary likelihood function, expect $0$ for the answer, since probabilities less than or equal to 1 are being multiplied for $10000$ times. 
+In the following R chunk, I create ordinary probit likelihood function, as well as the probit log likelihood function. For the ordinary likelihood function, expect $0$ for the answer, since probabilities less than or equal to 1 are being multiplied for a number of times. For the log likelihood function, expect a positive result, because I am supplying the negative of the computed log likelihood.
 
 ```{r}
 #Creating Likelihood Function
@@ -224,9 +222,22 @@ steepest_ascent =
 #Implementing Steepest Ascent
 betas = rep(0.5, 4)
 
-steepest_ascent(X, betas_old = betas,
-                h = 10^(-6), ydum, learning_rate = 0.000001, epsilon = .00000001)
+steepas = steepest_ascent(X, betas_old = betas,
+                h = 10^(-6), ydum, learning_rate = 0.000001, epsilon = .000000001)
 
+#True Parameters
+probit_model = glm(ydum ~ X1 + X2 + X3, family = binomial(link = "probit"))
+probit_coef = probit_model$coefficients
+
+#Comparison
+probit_steepest_df = data.frame(
+  steepas,
+  probit_coef,
+  abs(steepas - probit_coef)
+)
+colnames(probit_steepest_df) = c("Steepest Ascent", "True", "Difference")
+
+kable(probit_steepest_df, digits = 4, format = "markdown")
 ```
 
 # Exercise 4
@@ -305,7 +316,7 @@ kable(probit_coef_df, digits = 4, format = "markdown")
 
 Linear Regression: \newline
 
-Values from the optim function and the base package lm function are not different at all, with the maximum difference in coefficients being 0.0025. This maximum quantity can be considered neglegible. \newline
+Values from the optim function and the base package lm function are not different at all. These differences can be considered neglegible. \newline
 
 X1: An increase in X1 increases the ydum variable. \newline
 X2: An increase in X2 decreases the ydum variable. \newline
@@ -313,7 +324,7 @@ X3: An increase in X3 increases the ydum variable. \newline
 
 Logistic Regression: \newline
 
-Values from the optim function and the base package glm function are not different at all, with the maximum difference in coefficients being 0.0004. This maximum quantity can be considered neglegible. \newline
+Values from the optim function and the base package glm function are not different at all. These differences can be considered neglegible. \newline
 
 X1: An increase in X1 increases the likelihood of ydum = 1. \newline
 X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
@@ -321,7 +332,7 @@ X3: An increase in X3 increases the likelihood of ydum = 1. \newline
 
 Probit Regression: \newline
 
-Values from the optim function and the base package glm function are not different at all, with the maximum difference in coefficients being 0.0007. This maximum quantity can be considered neglegible. \newline
+Values from the optim function and the base package glm function are not different at all. These differences can be considered neglegible. \newline
 
 X1: An increase in X1 increases the likelihood of ydum = 1. \newline
 X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
@@ -419,6 +430,7 @@ Delta_df = gradient_g %*%
   sqrt() %>%
   as.data.frame()
 colnames(Delta_df) = "Delta Method SD"
+rownames(Delta_df) = c("Int", "X1", "X2", "X3")
 
 kable(Delta_df, digits = 4, format = "markdown")
 ```
