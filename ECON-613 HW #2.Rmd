@@ -238,6 +238,7 @@ probit_steepest_df = data.frame(
 colnames(probit_steepest_df) = c("Steepest Ascent", "True", "Difference")
 
 kable(probit_steepest_df, digits = 4, format = "markdown")
+
 ```
 
 Answer: \newline
