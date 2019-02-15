@@ -131,7 +131,7 @@ kable(bootstrap_se1, digits = 4, format = "markdown")
 ```
 
 Answer: \newline
-The difference in correlation and 1.2 is about 1. Personally judged, this difference is significant because it is greater than an arbitrarily chosen value of $0.05$. 
+The difference in correlation and 1.2 is about 1. Personally judged, this difference is significant.  
 
 # Exercise3
 
@@ -170,8 +170,8 @@ pro_log_likelihood = function(x, beta, ydum){
   
   #Calculating Phi(XB) and Preventing the Obtained Results from Being 0 and 1
   phi = map(X_Beta, pnorm) %>% unlist()
-  phi[phi < 0.0001] = 0.0001
-  phi[phi > 0.99] = 0.99 
+  phi[phi == 0] = 0.0001
+  phi[phi == 1] = 0.9999
   
   #Calculating the Log Likelihood Using the Formula
   log_likelihood =  sum( ydum * log(phi) + (1 - ydum) * log((1 - phi)) )
@@ -191,10 +191,10 @@ steepest_ascent =
   function(x, betas_old, h, ydum_, learning_rate, epsilon){
   
   #Initial Values (betas_new is initialized to start the while loop)
-  sum_sq_betas_diff = 10
-  betas_new = rep(0.5, 4)
+  d = 10
+  betas_new = rep(0, 4)
   
-  while( sum_sq_betas_diff > epsilon ){
+  while( d > epsilon ){
   
     #Computing Matrices to Be Used in Derivative
     betas_old_matrix = matrix(betas_old, nrow = 4, ncol = 4)
@@ -203,8 +203,8 @@ steepest_ascent =
     #Calculating Partial Derivatives of Log Likelihood
     derivative = c()
     for(i in 1:4){
-      derivative[i] = ( pro_log_likelihood(x, betas_new_matrix[i,], ydum_) - 
-                        pro_log_likelihood(x, betas_old_matrix[i,], ydum_) ) / h
+      derivative[i] = ( pro_log_likelihood(x, betas_new_matrix[,i], ydum_) - 
+                        pro_log_likelihood(x, betas_old_matrix[,i], ydum_) ) / h
     }
     
     #Updating Betas
@@ -212,7 +212,7 @@ steepest_ascent =
     betas_new = betas_old - learning_rate * derivative
     
     #Calculating sum_betas_diff
-    sum_sq_betas_diff = sum((betas_new - betas_old)^2)
+    d = sum( (betas_new - betas_old)^2 )
     
   }
   
@@ -220,10 +220,10 @@ steepest_ascent =
 }
 
 #Implementing Steepest Ascent
-betas = rep(0.5, 4)
+betas = rep(0, 4)
 
 steepas = steepest_ascent(X, betas_old = betas,
-                h = 10^(-6), ydum, learning_rate = 0.000001, epsilon = .000000001)
+                h = 10^(-6), ydum, learning_rate = 0.000001, epsilon = .00001)
 
 #True Parameters
 probit_model = glm(ydum ~ X1 + X2 + X3, family = binomial(link = "probit"))
@@ -242,7 +242,7 @@ kable(probit_steepest_df, digits = 4, format = "markdown")
 ```
 
 Answer: \newline
-According to the result, my steepest ascent values are fairly different from the true parameters. The intercept has the biggest difference, and $X3$ has the least difference.
+According to the result, my steepest ascent values are fairly comparable to the true parameter quantities. The sign of each parameter matches, as can be seen in the table. The variable that deviates the most from the true parameter is my intercept, while the variable that deviates the least from the true parameter is my X3. 
 
 # Exercise 4
 
@@ -316,31 +316,34 @@ colnames(probit_coef_df) = c("Optim Probit Function", "glm Probit Function")
 kable(probit_coef_df, digits = 4, format = "markdown")
 ```
 
-### Interpretation: \newline
+### Interpretation:
 
 Linear Regression: \newline
 
 Values from the optim function and the base package lm function are not different at all. These differences can be considered neglegible. \newline
 
-X1: An increase in X1 increases the ydum variable. \newline
-X2: An increase in X2 decreases the ydum variable. \newline
-X3: An increase in X3 increases the ydum variable. \newline
+Intercept: When all the X's are 0, the expected ydum variable is 0.91. \newline
+X1: Ceteris paribus, an increase in X1 increases the expected ydum value. \newline
+X2: Ceteris paribus, an increase in X2 decreases the expected ydum value. \newline
+X3: Ceteris paribus, an increase in X3 increases the expected ydum value. \newline
 
 Logistic Regression: \newline
 
 Values from the optim function and the base package glm function are not different at all. These differences can be considered neglegible. \newline
 
-X1: An increase in X1 increases the likelihood of ydum = 1. \newline
-X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
-X3: An increase in X3 increases the likelihood of ydum = 1. \newline
+Intercept: When all the X's are 0, the expected log odds of ydum = 1 is approximately 5$\%$ \newline
+X1: Ceteris parbius, an increase in X1 increases the likelihood of ydum = 1. \newline
+X2: Ceteris paribus, an increase in X2 decreases the likelihood of ydum = 1. \newline
+X3: Ceteris paribus, an increase in X3 increases the likelihood of ydum = 1. \newline
 
 Probit Regression: \newline
 
 Values from the optim function and the base package glm function are not different at all. These differences can be considered neglegible. \newline
 
-X1: An increase in X1 increases the likelihood of ydum = 1. \newline
-X2: An increase in X2 decreases the likelihood of ydum = 1. \newline
-X3: An increase in X3 increases the likelihood of ydum = 1.
+Intercept: When all the X's are 0, the expected likelihood ydum = 1 under the Standard Normal distribution is approximately 3.1 $\%$ \newline 
+X1: Ceteris paribus, an increase in X1 increases the likelihood of ydum = 1. \newline
+X2: Ceteris paribus, an increase in X2 decreases the likelihood of ydum = 1. \newline
+X3: Ceteris paribus, an increase in X3 increases the likelihood of ydum = 1.
 
 # Exercise 5
 
