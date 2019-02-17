@@ -131,7 +131,7 @@ kable(bootstrap_se1, digits = 4, format = "markdown")
 ```
 
 Answer: \newline
-The difference in correlation and 1.2 is about 1. Personally judged, this difference is significant.  
+The difference between correlation and 1.2 is about 1. Personally judged, this difference is significant.  
 
 # Exercise3
 
@@ -412,7 +412,7 @@ colnames(bootstrap_logit_sd) = "Logit SD of Bootstrap 49"
 rownames(bootstrap_logit_sd) = c("Int", "X1", "X2", "X3")
 kable(bootstrap_logit_sd, digits = 4, format = "markdown")
 
-#Delta Method
+#Delta Method for Probit
 
 ##Computing Covariance Matrix of Probit Regression
 v = vcov(probit_reg)
@@ -440,5 +440,35 @@ colnames(Delta_df) = "Delta Method SD"
 rownames(Delta_df) = c("Int", "X1", "X2", "X3")
 
 kable(Delta_df, digits = 4, format = "markdown")
+
+#Delta Method for logit
+
+##Computing Covariance Matrix of Probit Regression
+v2 = vcov(logit_reg)
+
+##Function to be used for Gradient
+g2 = function(x){
+  
+  logit_pdf = dlogis(X %*% x) %>% mean()
+  logit_marginal = logit_pdf * x
+  
+  return(logit_marginal)
+}
+
+##Gradient
+gradient_g2 = numDeriv::jacobian(g2, logit_reg$coefficients)
+
+##Table of Delta Method SD
+Delta_df2 = gradient_g2 %*% 
+  v2 %*% 
+  t(gradient_g2) %>% 
+  diag() %>% 
+  sqrt() %>%
+  as.data.frame()
+colnames(Delta_df2) = "Delta Method SD"
+rownames(Delta_df2) = c("Int", "X1", "X2", "X3")
+
+kable(Delta_df2, digits = 4, format = "markdown")
+
 ```
 
