@@ -1,0 +1,408 @@
+---
+title: 'ECON-613 HW #3'
+author: "Peter Kim"
+date: "``r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, include = FALSE}
+install.packages("bayesm")
+install.packages("mlogit")
+library(tidyverse)
+library(bayesm)
+library(knitr)
+library(mlogit)
+```
+
+# Exercise1
+
+```{r}
+#Reading Data
+data(margarine)
+
+#Subsetting Data
+mar_choicePrice = margarine$choicePrice %>% as.data.frame()
+mar_demos = margarine$demos %>% as.data.frame()
+
+#Average and Spread by Columns
+avg_col = mar_choicePrice[, 3:12] %>% colMeans() 
+spread_col = mar_choicePrice[, 3:12] %>% apply(MARGIN = 2, FUN = var) 
+
+#Dataframe of Average and Spread by Columns
+avg_spread_col_df = data.frame(
+  avg_col,
+  spread_col
+)
+colnames(avg_spread_col_df) = c("average", "spread")
+
+#Table of Average and Spread by Columns
+kable(avg_spread_col_df, digits = 4, 
+      caption = "Table of Average and Spread of Product Characteristics")
+
+#Average and Spread by Stick and Tubs
+stick_avg_spread = select(mar_choicePrice, contains("Stk")) %>% 
+  gather(key = "stk", value = vals) %>%
+  summarise(mean = mean(vals), var = sd(vals)^2)
+rownames(stick_avg_spread) = "Stick"
+
+tub_avg_spread = select(mar_choicePrice, contains("Tub")) %>% 
+  gather(key = "tub", value = vals) %>%
+  summarise(mean = mean(vals), var = var(vals))
+rownames(tub_avg_spread) = "Tub"
+
+avg_spread_char_df = rbind(stick_avg_spread, tub_avg_spread)
+
+kable(avg_spread_char_df, digits = 4)
+
+#Market Share
+choice_total = table(mar_choicePrice$choice) %>% sum()
+market_share = (table(mar_choicePrice$choice) / choice_total) %>% 
+  as.data.frame()
+
+#Removing Var1
+market_share = market_share %>%
+  select(Freq)
+
+#Providing Appropriate Colnames and Rownames
+colnames(market_share) = "Market Share"
+rownames(market_share) = colnames(mar_choicePrice)[3:12]
+
+#Table of Market Share
+kable(market_share, digits = 4, 
+      caption = "Table of Market Share Based on Products")
+
+#Finding Indices of Sticks and Tubs
+stk_idx = colnames(mar_choicePrice[3:12]) %>% 
+  ends_with(match = "stk", ignore.case = TRUE)
+tub_idx = colnames(mar_choicePrice[3:12]) %>%
+  ends_with(match = "tub", ignore.case = TRUE)
+
+#Calculating the Total Numbers of Sticks and Tubs
+stk_tot = table(mar_choicePrice$choice)[stk_idx] %>% sum()
+tub_tot = table(mar_choicePrice$choice)[tub_idx] %>% sum()
+
+#Calculating Market Shares Based on Sticks and Tubs
+market_share_char = data.frame(
+  c(stk_tot / dim(mar_choicePrice)[1], tub_tot / dim(mar_choicePrice)[1])
+)
+colnames(market_share_char) = "Market Share"
+rownames(market_share_char) = c("Sticks", "Tubs")
+
+#Table of Market Shares Based on Sticks and Tubs
+kable(market_share_char, digits = 4, 
+      caption = "Table of Market Shares Based on Sticks vs. Tubs")
+
+#Creating Mode Function to Map Between Observed Attributed and Choices
+getmode = function(v) {
+   uniq = unique(v)
+   return( uniq[which.max(tabulate(match(v, uniq)))] )
+}
+
+#Creating getcolNames Function to Convert Results to Names
+getcolNames = function(m) {
+  
+  names = colnames(mar_choicePrice[3:12])[m] %>% unlist()
+  
+  return(names)
+}
+
+#Finding Mode of Choices Based on Income Categories
+map_df = left_join(x = mar_choicePrice, y = mar_demos, by = "hhid") %>%
+  select(choice, Income) %>%
+  group_by(Income) %>%
+  summarise( mode = getmode(choice) )
+
+#Adding a Column of Product Mostly Purchased
+map_df = map_df %>%
+  mutate(
+    map_chr(map_df$mode, getcolNames)
+  )
+colnames(map_df) = c("Income", "Mode", "Product Mostly Purchased")
+
+kable(map_df, digits = 4, 
+      caption = "Mapping Between Observed Attributes and Choices")
+```
+
+
+# Exercise2
+
+For this exercise, I propose to use a conditional logit model. \newline
+
+According to the class slide, for conditional logit model,
+$$
+p_{ij} = \frac{exp(x_{ij} \beta)}{\sum_{l=1}^{m} exp(x_{il} \beta)}
+$$  
+
+According to page 496 of textbook, 
+
+$$
+\begin{aligned}
+L(\beta \mid x_{ij}, y_{ij}) = \Pi_{i=1}^{n} \Pi_{j=1}^{m} p_{ij}^{y_{ij}}
+\end{aligned}
+$$
+
+But before we calculate the likelihood, we have to calculate the indicator variable $y_{ij}$ for $i \in \{1, ..., 4470 \}$ and $j \in \{1, ..., 10 \}$. $y$ is choice, in the dataset.
+
+$$
+y_{ij} = 
+\begin{cases} 
+      1 & y = j \\
+      0 & y \neq j 
+\end{cases}
+$$
+
+```{r}
+#Allocating Memory for Matrix y
+y = matrix(0, nrow = dim(mar_choicePrice)[1], 
+           ncol = dim(mar_choicePrice[, 3:12])[2])
+
+#Calculating y
+for( j in seq(1, 10) ){
+  for( i in 1:dim(mar_choicePrice)[1] ){
+    
+    if(mar_choicePrice$choice[i] == j){
+        y[i, j] = 1
+    }
+    
+  }
+}
+```
+
+Now, we implement the conditional logit likelihood.
+
+```{r}
+#Condtional Likelihood Function
+cond_logit_lik = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( c(0, beta[1:9]), each = n ), nrow = n, ncol = 10)
+  
+  #Non-Intercept Matrix
+  xbeta = as.matrix( mar_choicePrice[, 3:12] ) * beta[10]
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating Likelihood
+  likelihood = prod( p_ij^(y) )
+  
+  return(likelihood)
+  
+}
+```
+
+The log likelihood of the conditional logit model is the following. Note that negative of the log likelihood value is returned.
+
+```{r}
+#Conditional Logit Log Likelihood
+cond_logit_log_lik = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( c(0, beta[1:9]), each = n ), nrow = n, ncol = 10)
+  
+  #Non-Intercept Matrix
+  xbeta = as.matrix( mar_choicePrice[, 3:12] ) * beta[10]
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_lik = sum( y * log( p_ij ) )
+    
+  return(-log_lik)
+  
+}
+```
+
+Since the likelihood and loglikelihood functions are defined above, we now optimize the model and present the results. Note that $\hat{\alpha}$'s represent intercepts.
+
+```{r, warning = FALSE}
+#Dimension Calculation for Following Intercept Matrix
+n = nrow( mar_choicePrice )
+  
+#Initializing Parameters
+b = rep(-1.8, 10)
+
+#Optimizing Log Likelihood Function
+opt = optim(par = b, fn = cond_logit_log_lik)
+
+opt_df = data.frame(
+  opt$par
+  )
+colnames(opt_df) = c("Optimized Coefficient")
+rownames(opt_df) = c("$\\hat{\\alpha}_{1}$", "$\\hat{\\alpha}_{2}$",
+                     "$\\hat{\\alpha}_{3}$", "$\\hat{\\alpha}_{4}$",
+                     "$\\hat{\\alpha}_{5}$", "$\\hat{\\alpha}_{6}$",
+                     "$\\hat{\\alpha}_{7}$", "$\\hat{\\alpha}_{8}$",
+                     "$\\hat{\\alpha}_{9}$", "$\\hat{\\beta}_{price}$")
+
+kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+```
+
+## Interpretation
+
+According to the table, $\hat{\beta}_{price} = -6.3206$. This means that the likelihood of product being purchased decreases as the price increases.
+
+# Exercise3
+
+For this exercise, I propose to use multinomial logit model.
+
+According to page 494 of the textbook, for multinomial logit model,
+
+$$
+p_{ij} = \frac{exp(\alpha_{j} + \beta_{Ij} I_{i})}{\sum_{k=1}^{m} exp(\alpha_{k} + \beta_{Ik} I_{i})}
+$$
+
+where $I$ denotes income. \newline
+
+According to page 496 of textbook, 
+
+$$
+\begin{aligned}
+L(\beta \mid x_{ij}, y_{ij}) = \Pi_{i=1}^{n} \Pi_{j=1}^{m} p_{ij}^{y_{ij}}
+\end{aligned}
+$$
+
+Since we have calculated y in exercise 2, we proceed to implementing the multinomial logit likelihood. We also merge choicePrice data frame and demos data frame here.
+
+```{r}
+#Merging Data to Put Choice and Income in One Data Frame
+merged_data = left_join(x = mar_choicePrice, y = mar_demos, by = "hhid") 
+
+#Choice and Income Data Frame
+choice_I_df = merged_data %>%
+  select(choice, Income) %>%
+  arrange(Income)
+
+#Defining Variable I
+I = choice_I_df$Income
+```
+
+
+```{r}
+#Multinomial Logit Likelihood
+multi_logit_lik = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( beta[1:10], each = n ), nrow = n, ncol = 10 ) 
+  
+  #Non-Intercept Matrix
+  xbeta = matrix( rep( beta[11:20], each = n), nrow = n, ncol = 10 ) * I
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating Likelihood
+  likelihood = prod( p_ij^(y) )
+  
+  return(likelihood)
+  
+}
+```
+
+We now calculate the log likelihood.
+
+```{r}
+#Multinomial Logit Likelihood
+multi_logit_log_lik = function(betas){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( betas[1:10], each = n), nrow = n, ncol = 10 )
+  
+  #Non-Intercept Matrix
+  xbeta = matrix( rep( betas[11:20], each = n), nrow = n, ncol = 10 ) * I
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_logit = sum( y*log( p_ij ) )
+  
+  return(-log_logit)
+  
+}
+```
+
+Since the likelihood and loglikelihood functions are defined above, we now optimize the model. 
+
+```{r, warning = FALSE}
+betas = c(0, -0.5, -2.5, -1.5, -1.5, -4, -1.5, -3, -2.5, -4, 
+         rep(0, 10))
+
+I = choice_I_df$Income
+
+#Optimizing Log Likelihood Function
+opt = optim(par = betas, fn = multi_logit_log_lik)
+
+opt_df = data.frame(
+  opt$par[1:10],
+  opt$par[11:20]
+  )
+colnames(opt_df) = c("Optimized $\\hat{\\alpha}$", "Optimzed $\\hat{\\beta}$")
+rownames(opt_df) = c("Reference", seq(2, 10))
+
+kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+```
+
+## Interpretation
+$\beta_{Income_{2}}$: It is more likely for an individual to choose choice 1 than choice 2 if his or her income increases. \newline
+
+$\beta_{Income_{3}}$: It is more likely for an individual to choose choice 1 than choice 3 if his or her income increases. \newline
+
+$\beta_{Income_{4}}$: It is more likely for an individual to choose choice 4 than choice 1 if his or her income increases. \newline
+
+$\beta_{Income_{5}}$: It is more likely for an individual to choose choice 5 than choice 1 if his or her income increases. \newline
+
+$\beta_{Income_{6}}$: It is more likely for an individual to choose choice 6 than choice 1 if his or her income increases. \newline
+
+$\beta_{Income_{7}}$: It is more likely for an individual to choose choice 7 than choice 1 if his or her income increases. \newline
+
+$\beta_{Income_{8}}$: It is more likely for an individual to choose choice 1 than choice 8 if his or her income increases. \newline
+
+$\beta_{Income_{9}}$: It is more likely for an individual to choose choice 1 than choice 9 if his or her income increases. \newline
+
+$\beta_{Income_{10}}$: It is more likely for an individual to choose choice 10 than choice 1 if his or her income increases. \newline
+
+
+
+# Exercise4
+
+# Exercise5
