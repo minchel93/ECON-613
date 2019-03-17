@@ -406,3 +406,58 @@ $\beta_{Income_{10}}$: It is more likely for an individual to choose choice 10 t
 # Exercise4
 
 # Exercise5
+
+The following is the mixed logit log likelihood function.
+
+```{r}
+mixed_logit_log_lik = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( beta[1:10], each = n ), nrow = n, ncol = 10)
+  
+  #Non-Intercept Matrix
+  xbeta_I = matrix( rep( beta[11:20], each = n), nrow = n, ncol = 10 ) * I
+  xbeta_p = as.matrix( mar_choicePrice[, 3:12] ) * beta[21]
+  
+  #Calculating XB
+  XB = alpha + xbeta_p + xbeta_I
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_lik = sum( y * log( p_ij ) )
+    
+  return(-log_lik)
+}
+```
+
+```{r}
+betas = c(0, -1, 1, -2, -3, -2, 0.5, 1, 2, -4, 
+         rep(0, 10), -6)
+
+I = choice_I_df$Income
+
+#Optimizing Log Likelihood Function
+opt = optim(par = betas, fn = mixed_logit_log_lik)
+
+opt_df = data.frame(
+  c(opt$par[1:10], opt$par[11:20], opt$par[21])
+  )
+colnames(opt_df) = c("Optimzed $\\hat{\\beta}$")
+rownames(opt_df) = c("Intercept Reference",
+                     paste("Intercept", 2:10, sep = ""), 
+                     "Price", 
+                     "Income Reference",
+                     paste("Income", 2:10, sep = ""))
+
+kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+
+```
+
