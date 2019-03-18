@@ -1,7 +1,7 @@
 ---
 title: 'ECON-613 HW #3'
 author: "Peter Kim"
-date: "``r Sys.Date()`"
+date: "`r Sys.Date()`"
 output:
   pdf_document: default
   html_document: default
@@ -39,7 +39,7 @@ colnames(avg_spread_col_df) = c("average", "spread")
 
 #Table of Average and Spread by Columns
 kable(avg_spread_col_df, digits = 4, 
-      caption = "Table of Average and Spread of Product Characteristics")
+      caption = "Table of Average and Spread by Product Brand")
 
 #Average and Spread by Stick and Tubs
 stick_avg_spread = select(mar_choicePrice, contains("Stk")) %>% 
@@ -54,7 +54,8 @@ rownames(tub_avg_spread) = "Tub"
 
 avg_spread_char_df = rbind(stick_avg_spread, tub_avg_spread)
 
-kable(avg_spread_char_df, digits = 4)
+kable(avg_spread_char_df, digits = 4, 
+      caption = "Table of Average and Spread (Var) by Stick and Tubs")
 
 #Market Share
 choice_total = table(mar_choicePrice$choice) %>% sum()
@@ -125,6 +126,9 @@ kable(map_df, digits = 4,
       caption = "Mapping Between Observed Attributes and Choices")
 ```
 
+## Comment
+
+For mapping between observed attributes and choices, I wanted to know which product has been purchased the most based on each income category. 
 
 # Exercise2
 
@@ -143,7 +147,7 @@ L(\beta \mid x_{ij}, y_{ij}) = \Pi_{i=1}^{n} \Pi_{j=1}^{m} p_{ij}^{y_{ij}}
 \end{aligned}
 $$
 
-But before we calculate the likelihood, we have to calculate the indicator variable $y_{ij}$ for $i \in \{1, ..., 4470 \}$ and $j \in \{1, ..., 10 \}$. $y$ is choice, in the dataset.
+But before we calculate the likelihood, we have to calculate the indicator variable $y_{ij}$ for $i \in \{1, ..., 4470 \}$ and $j \in \{1, ..., 10 \}$. $y$ represents column "choice" in the dataset.
 
 $$
 y_{ij} = 
@@ -173,7 +177,7 @@ for( j in seq(1, 10) ){
 Now, we implement the conditional logit likelihood.
 
 ```{r}
-#Condtional Likelihood Function
+#Condtional Logit Likelihood Function
 cond_logit_lik = function(beta){
   
   #Intercept Matrix
@@ -332,7 +336,7 @@ multi_logit_lik = function(beta){
 We now calculate the log likelihood.
 
 ```{r}
-#Multinomial Logit Likelihood
+#Multinomial Logit Log Likelihood
 multi_logit_log_lik = function(betas){
   
   #Intercept Matrix
@@ -379,7 +383,7 @@ opt_df = data.frame(
 colnames(opt_df) = c("Optimized $\\hat{\\alpha}$", "Optimzed $\\hat{\\beta}$")
 rownames(opt_df) = c("Reference", seq(2, 10))
 
-kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+kable(opt_df, digits = 4, caption = "Coefficients Under Multinomial Logit")
 ```
 
 ## Interpretation
@@ -438,26 +442,127 @@ mixed_logit_log_lik = function(beta){
 }
 ```
 
+Here, we optimize the log likelihood function.
 ```{r}
+#Initial Values
 betas = c(0, -1, 1, -2, -3, -2, 0.5, 1, 2, -4, 
          rep(0, 10), -6)
 
+#Defining I
 I = choice_I_df$Income
 
 #Optimizing Log Likelihood Function
-opt = optim(par = betas, fn = mixed_logit_log_lik)
+opt1 = optim(par = betas, fn = mixed_logit_log_lik)
 
 opt_df = data.frame(
-  c(opt$par[1:10], opt$par[11:20], opt$par[21])
+  c(opt1$par[1:10], opt1$par[11:20], opt1$par[21])
   )
-colnames(opt_df) = c("Optimzed $\\hat{\\beta}$")
+colnames(opt_df) = c("Optimzed $\\hat{\\beta}^{f}$")
 rownames(opt_df) = c("Intercept Reference",
                      paste("Intercept", 2:10, sep = ""), 
-                     "Price", 
                      "Income Reference",
-                     paste("Income", 2:10, sep = ""))
+                     paste("Income", 2:10, sep = ""),
+                           "Price")
 
-kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+kable(opt_df, digits = 4, caption = "Coefficients Under Mixed Logit")
 
 ```
 
+Here, we also implement mixed logit log likelihood. But, this time, we compute the mixed logit log likelihood after removing choice 10.
+
+```{r}
+#Dataframe After Removing Choice 1
+choicePrice2 = merged_data %>%
+  filter(choice != 10)
+
+n2 = nrow(choicePrice2)
+
+#Allocating Memory for Matrix y
+y2 = matrix(0, nrow = dim(choicePrice2)[1], 
+           ncol = dim(choicePrice2[, 3:11])[2])
+
+#Calculating y
+for( j in seq(1, 10) ){
+  for( i in 1:dim(choicePrice2)[1] ){
+    
+    if(choicePrice2$choice[i] == j){
+        y2[i, j] = 1
+    }
+    
+  }
+}
+  
+#New Mixed Logit Log Likelihood
+mixed_logit_log_lik2 = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( beta[1:9], each = n2 ), nrow = n2, ncol = 9)
+  
+  #Non-Intercept Matrix
+  xbeta_I = matrix( rep( beta[11:19], each = n2), nrow = n2, ncol = 9 ) *
+    choicePrice2$Income
+  xbeta_p = as.matrix( choicePrice2[, 3:11] ) * beta[21]
+  
+  #Calculating XB
+  XB = alpha + xbeta_p + xbeta_I
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_lik = sum( y2 * log( p_ij ) )
+    
+  return(-log_lik)
+}
+```
+
+We optimize the removed mixed logit log likelihood.
+
+```{r}
+#Initial Values
+betas = c(0, -1, 1, -2, -3, -2, 0.5, 1, 2, -4, 
+         rep(0, 10), -6)
+
+#Defining I
+I = choice_I_df$Income
+
+#Optimizing Log Likelihood Function
+opt2 = optim(par = betas, fn = mixed_logit_log_lik2)
+
+opt2_df = data.frame(
+  c(opt2$par[1:9], opt2$par[11:19], opt2$par[21])
+  )
+colnames(opt2_df) = c("Optimzed $\\hat{\\beta}^{r}$")
+rownames(opt2_df) = c("Intercept Reference",
+                     paste("Intercept", 2:9, sep = ""), 
+                     "Income Reference",
+                     paste("Income", 2:9, sep = ""),
+                           "Price")
+
+kable(opt2_df, digits = 4, caption = "Coefficients Under Removed Mixed Logit")
+```
+
+We compute test statistics here. Note that the deviance follows a $\chi^{2}$ distribution.
+
+```{r}
+#Calculating Test Statistic
+MTT = -2* (mixed_logit_log_lik2(opt1$par) - 
+             mixed_logit_log_lik2(opt2$par))
+
+#Table of Test Statistics
+kable(data.frame(MTT), digits = 4, caption = "Test Stiatistics",
+      col.names = "MTT")
+
+#Acceptance / Rejection
+pchisq(MTT, df = length(opt2$par[c(1:9, 11:19, 21)]), lower.tail = F)
+```
+
+## Conclusion
+
+Since the test shows p-value of 1, IIA holds.
