@@ -28,7 +28,7 @@ mar_demos = margarine$demos %>% as.data.frame()
 
 #Average and Spread by Columns
 avg_col = mar_choicePrice[, 3:12] %>% colMeans() 
-spread_col = mar_choicePrice[, 3:12] %>% apply(MARGIN = 2, FUN = var) 
+spread_col = mar_choicePrice[, 3:12] %>% apply(MARGIN = 2, FUN = sd) 
 
 #Dataframe of Average and Spread by Columns
 avg_spread_col_df = data.frame(
@@ -39,7 +39,39 @@ colnames(avg_spread_col_df) = c("average", "spread")
 
 #Table of Average and Spread by Columns
 kable(avg_spread_col_df, digits = 4, 
-      caption = "Table of Average and Spread by Product Brand")
+      caption = "Table of Average and Spread by Column")
+
+#Identifying Unique Brands
+brands = sub("_.*", "", colnames(mar_choicePrice))[3:12] %>% unique()
+
+#Indices of Each Brand
+index1 = grepl(brands[1], colnames(mar_choicePrice)) %>% which()
+index2 = grepl(brands[2], colnames(mar_choicePrice)) %>% which()
+index3 = grepl(brands[3], colnames(mar_choicePrice)) %>% which()
+index4 = grepl(brands[4], colnames(mar_choicePrice)) %>% which()
+index5 = grepl(brands[5], colnames(mar_choicePrice)) %>% which()
+index6 = grepl(brands[6], colnames(mar_choicePrice)) %>% which()
+index7 = grepl(brands[7], colnames(mar_choicePrice)) %>% which()
+
+#Average and Spread by Brand
+b1 = mar_choicePrice[, index1] %>% gather(key) %>% .[, 2] 
+b2 = mar_choicePrice[, index2] 
+b3 = mar_choicePrice[, index3] %>% gather(key) %>% .[, 2] 
+b4 = mar_choicePrice[, index4] %>% gather(key) %>% .[, 2] 
+b5 = mar_choicePrice[, index5] 
+b6 = mar_choicePrice[, index6] 
+b7 = mar_choicePrice[, index7] 
+
+#Table of Average and Spread by Brand
+brand_avg_sd_df = data.frame(
+  c(brands[1:7]),
+  c(mean(b1), mean(b2), mean(b3), mean(b4), mean(b5), mean(b6), mean(b7)),
+  c(sd(b1), sd(b2), sd(b3), sd(b4), sd(b5), sd(b6), sd(b7))
+)
+colnames(brand_avg_sd_df) = c("Brand", "Mean", "Sd")
+
+kable(brand_avg_sd_df, digits = 4, 
+      caption = "Table of Average and Spread by Brand")
 
 #Average and Spread by Stick and Tubs
 stick_avg_spread = select(mar_choicePrice, contains("Stk")) %>% 
@@ -95,34 +127,51 @@ rownames(market_share_char) = c("Sticks", "Tubs")
 kable(market_share_char, digits = 4, 
       caption = "Table of Market Shares Based on Sticks vs. Tubs")
 
-#Creating Mode Function to Map Between Observed Attributed and Choices
-getmode = function(v) {
-   uniq = unique(v)
-   return( uniq[which.max(tabulate(match(v, uniq)))] )
-}
+#Defining Table of Choices
+tb = table(mar_choicePrice$choice)
 
-#Creating getcolNames Function to Convert Results to Names
-getcolNames = function(m) {
-  
-  names = colnames(mar_choicePrice[3:12])[m] %>% unlist()
-  
-  return(names)
-}
+#Calculating Market Share of Each Brand
+mark1 = tb[index1 - 2] %>% sum() / 4470
+mark2 = tb[index2 - 2] %>% sum() / 4470
+mark3 = tb[index3 - 2] %>% sum() / 4470
+mark4 = tb[index4 - 2] %>% sum() / 4470
+mark5 = tb[index5 - 2] %>% sum() / 4470
+mark6 = tb[index6 - 2] %>% sum() / 4470
+mark7 = tb[index7 - 2] %>% sum() / 4470
 
-#Finding Mode of Choices Based on Income Categories
-map_df = left_join(x = mar_choicePrice, y = mar_demos, by = "hhid") %>%
-  select(choice, Income) %>%
-  group_by(Income) %>%
-  summarise( mode = getmode(choice) )
+#Dataframe of Frequency of Each Brand
+brand_df = data.frame(
+  c(brands[1:7]),
+  c(mark1, mark2, mark3, mark4, mark5, mark6, mark7)
+)
+colnames(brand_df) = c("Brands", "Marketshare")
 
-#Adding a Column of Product Mostly Purchased
-map_df = map_df %>%
-  mutate(
-    map_chr(map_df$mode, getcolNames)
-  )
-colnames(map_df) = c("Income", "Mode", "Product Mostly Purchased")
+kable(brand_df, digits = 4, caption = "Market Share by Brand")
 
-kable(map_df, digits = 4, 
+
+#Counting Choices Based on Income
+choices_Income_df = left_join(x = mar_choicePrice, y = mar_demos, 
+                              by = "hhid") %>% select(choice, Income) %>%
+  group_by(choice, Income) %>% 
+  tally() %>% 
+  arrange(Income) %>% 
+  spread(key = Income, value = n)
+
+#Replacing NA's with 0
+choices_Income_df[is.na(choices_Income_df)] = 0 
+
+#Calculating Market Share by Income
+Income_market_df = data.frame(
+  colnames(mar_choicePrice[, 3:12]),
+  apply(choices_Income_df[, 2:15], 2, function(x) x / sum(x))
+)
+colnames(Income_market_df) = 
+  c("Brands", mar_demos$Income %>% unique() %>% sort())
+
+kable(Income_market_df[, 1:6], digits = 4, 
+      caption = "Mapping Between Observed Attributes and Choices")
+
+kable(Income_market_df[, 7:15], digits = 4, 
       caption = "Mapping Between Observed Attributes and Choices")
 ```
 
@@ -250,17 +299,17 @@ b = rep(-1.8, 10)
 #Optimizing Log Likelihood Function
 opt = optim(par = b, fn = cond_logit_log_lik)
 
-opt_df = data.frame(
+cond_opt_df = data.frame(
   opt$par
   )
-colnames(opt_df) = c("Optimized Coefficient")
-rownames(opt_df) = c("$\\hat{\\alpha}_{1}$", "$\\hat{\\alpha}_{2}$",
+colnames(cond_opt_df) = c("Optimized Coefficient")
+rownames(cond_opt_df) = c("$\\hat{\\alpha}_{1}$", "$\\hat{\\alpha}_{2}$",
                      "$\\hat{\\alpha}_{3}$", "$\\hat{\\alpha}_{4}$",
                      "$\\hat{\\alpha}_{5}$", "$\\hat{\\alpha}_{6}$",
                      "$\\hat{\\alpha}_{7}$", "$\\hat{\\alpha}_{8}$",
                      "$\\hat{\\alpha}_{9}$", "$\\hat{\\beta}_{price}$")
 
-kable(opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+kable(cond_opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
 ```
 
 ## Interpretation
@@ -374,16 +423,16 @@ betas = c(0, -0.5, -2.5, -1.5, -1.5, -4, -1.5, -3, -2.5, -4,
 I = choice_I_df$Income
 
 #Optimizing Log Likelihood Function
-opt = optim(par = betas, fn = multi_logit_log_lik)
+multi_opt = optim(par = betas, fn = multi_logit_log_lik)
 
-opt_df = data.frame(
-  opt$par[1:10],
-  opt$par[11:20]
+multi_opt_df = data.frame(
+  multi_opt$par[1:10],
+  multi_opt$par[11:20]
   )
-colnames(opt_df) = c("Optimized $\\hat{\\alpha}$", "Optimzed $\\hat{\\beta}$")
-rownames(opt_df) = c("Reference", seq(2, 10))
+colnames(multi_opt_df) = c("Optimized $\\hat{\\alpha}$", "Optimzed $\\hat{\\beta}$")
+rownames(multi_opt_df) = c("Reference", seq(2, 10))
 
-kable(opt_df, digits = 4, caption = "Coefficients Under Multinomial Logit")
+kable(multi_opt_df, digits = 4, caption = "Coefficients Under Multinomial Logit")
 ```
 
 ## Interpretation
@@ -408,6 +457,128 @@ $\beta_{Income_{10}}$: It is more likely for an individual to choose choice 10 t
 
 
 # Exercise4
+
+For conditional logit, the marginal effect is computed as the following.
+
+```{r}
+#Conditional Logit Log Likelihood
+cond_logit_log_lik2 = function(beta){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( c(0, beta[1:9]), each = n ), nrow = n, ncol = 10)
+  
+  #Non-Intercept Matrix
+  xbeta = as.matrix( mar_choicePrice[, 3:12] ) * beta[10]
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_lik = sum( y * log( p_ij ) )
+    
+  return(p_ij)
+  
+}
+
+#Saving P from Conditional Logit Log Likelihood
+P = cond_logit_log_lik2(cond_opt_df$`Optimized Coefficient`)
+
+#Saving Price Beta from Estimated Coefficient
+beta = cond_opt_df$`Optimized Coefficient`[10]
+
+#Allocating Memory for Conditional Marginal
+conditional_marginal = matrix(NA, nrow = 10, ncol = 10)
+
+#Calculating Average Marginal Effect
+for( j in 1:10 ){
+  for( k in 1:10 ){
+    
+    delta = ifelse(j == k, 1, 0)
+    conditional_marginal[j, k] = mean(P[, j] * (delta - P[, k]) * beta)
+    
+  }
+}
+
+cond_marg_df = conditional_marginal %>% as.data.frame()
+
+kable(cond_marg_df[,1:5], digits = 4, caption = 
+        "Average Marginal Effect Under Conditional")
+
+kable(cond_marg_df[,6:10], digits = 4, caption = 
+        "Average Marginal Effect Under Conditional")
+
+```
+
+## Interpretation
+Each increase in price decreases the probability of choosing jth choice but increases the probability of choosing non-jth choice.
+
+For multinomial logit, the marginal effect is calculated as the following.
+
+```{r}
+#Multinomial Logit Log Likelihood
+multi_logit_log_lik2 = function(betas){
+  
+  #Intercept Matrix
+  alpha = matrix( rep( betas[1:10], each = n), nrow = n, ncol = 10 )
+  
+  #Non-Intercept Matrix
+  xbeta = matrix( rep( betas[11:20], each = n), nrow = n, ncol = 10 ) * I
+  
+  #Calculating XB
+  XB = alpha + xbeta
+  
+  #Calculating Numerator
+  N = exp(XB)
+  
+  #Calculating Denominator
+  D = exp(XB) %>% rowSums()
+  
+  #Calculating Probability p
+  p_ij = N / D
+  
+  #Calculating log Likelihood
+  log_logit = sum( y*log( p_ij ) )
+  
+  return(p_ij)
+  
+}
+
+#Probability from Multinomial
+multi_P = multi_logit_log_lik2(multi_opt$par)
+
+#Betas
+multi_beta = multi_opt$par[11:20]
+
+#Calculating Beta-Bar
+beta_bar = multi_P %*% (multi_beta)
+
+#Allocating Memory for Multinomial Marginal Effect
+multi_marginal = rep(NA, 10)
+
+#Calculating Multinomial Marginal Effect
+for(j in 1:10){
+  multi_marginal[j] = mean(multi_P[, j] * (multi_opt$par[11:20] - beta_bar))
+}
+
+multi_mar_df = multi_marginal %>% as.data.frame()
+
+kable(multi_mar_df, digits = 4, col.names = "Average Marginal Effect",
+      caption = "Average Marginal Effect Under Multinomial Logit")
+```
+
+## Interpretaion
+
+Each one-unit increase in income changes the probability of selecting jth choice by the given magnitude.
+
 
 # Exercise5
 
