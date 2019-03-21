@@ -76,25 +76,25 @@ kable(brand_avg_sd_df, digits = 4,
 #Average and Spread by Stick and Tubs
 stick_avg_spread = select(mar_choicePrice, contains("Stk")) %>% 
   gather(key = "stk", value = vals) %>%
-  summarise(mean = mean(vals), var = sd(vals)^2)
+  summarise(mean = mean(vals), sd = sd(vals))
 rownames(stick_avg_spread) = "Stick"
 
 tub_avg_spread = select(mar_choicePrice, contains("Tub")) %>% 
   gather(key = "tub", value = vals) %>%
-  summarise(mean = mean(vals), var = var(vals))
+  summarise(mean = mean(vals), sd = sd(vals))
 rownames(tub_avg_spread) = "Tub"
 
 avg_spread_char_df = rbind(stick_avg_spread, tub_avg_spread)
 
 kable(avg_spread_char_df, digits = 4, 
-      caption = "Table of Average and Spread (Var) by Stick and Tubs")
+      caption = "Table of Average and Spread by Stick and Tubs")
 
 #Market Share
 choice_total = table(mar_choicePrice$choice) %>% sum()
 market_share = (table(mar_choicePrice$choice) / choice_total) %>% 
   as.data.frame()
 
-#Removing Var1
+#Selecting Market Share
 market_share = market_share %>%
   select(Freq)
 
@@ -175,20 +175,16 @@ kable(Income_market_df[, 7:15], digits = 4,
       caption = "Mapping Between Observed Attributes and Choices")
 ```
 
-## Comment
-
-For mapping between observed attributes and choices, I wanted to know which product has been purchased the most based on each income category. 
-
 # Exercise2
 
 For this exercise, I propose to use a conditional logit model. \newline
 
-According to the class slide, for conditional logit model,
+According to the class slide, probability for conditional logit model is stated as the following:
 $$
 p_{ij} = \frac{exp(x_{ij} \beta)}{\sum_{l=1}^{m} exp(x_{il} \beta)}
 $$  
 
-According to page 496 of textbook, 
+According to page 496 of textbook, the likelihood for conditional logit model is stated as the following:
 
 $$
 \begin{aligned}
@@ -196,7 +192,7 @@ L(\beta \mid x_{ij}, y_{ij}) = \Pi_{i=1}^{n} \Pi_{j=1}^{m} p_{ij}^{y_{ij}}
 \end{aligned}
 $$
 
-But before we calculate the likelihood, we have to calculate the indicator variable $y_{ij}$ for $i \in \{1, ..., 4470 \}$ and $j \in \{1, ..., 10 \}$. $y$ represents column "choice" in the dataset.
+Before we calculate the likelihood, we have to calculate the indicator variable $y_{ij}$ for $i \in \{1, ..., 4470 \}$ and $j \in \{1, ..., 10 \}$. $y$ represents the column "choice" in the dataset.
 
 $$
 y_{ij} = 
@@ -309,7 +305,7 @@ rownames(cond_opt_df) = c("$\\hat{\\alpha}_{1}$", "$\\hat{\\alpha}_{2}$",
                      "$\\hat{\\alpha}_{7}$", "$\\hat{\\alpha}_{8}$",
                      "$\\hat{\\alpha}_{9}$", "$\\hat{\\beta}_{price}$")
 
-kable(cond_opt_df, digits = 4, caption = "Price Coefficient Under Conditional Logit")
+kable(cond_opt_df, digits = 4, caption = "Coefficients Under Conditional Logit")
 ```
 
 ## Interpretation
@@ -320,7 +316,7 @@ According to the table, $\hat{\beta}_{price} = -6.3206$. This means that the lik
 
 For this exercise, I propose to use multinomial logit model.
 
-According to page 494 of the textbook, for multinomial logit model,
+According to page 494 of the textbook, probability for multinomial logit model is
 
 $$
 p_{ij} = \frac{exp(\alpha_{j} + \beta_{Ij} I_{i})}{\sum_{k=1}^{m} exp(\alpha_{k} + \beta_{Ik} I_{i})}
@@ -328,7 +324,7 @@ $$
 
 where $I$ denotes income. \newline
 
-According to page 496 of textbook, 
+According to page 496 of textbook, the likelihood of multinomial logit model is 
 
 $$
 \begin{aligned}
@@ -336,7 +332,7 @@ L(\beta \mid x_{ij}, y_{ij}) = \Pi_{i=1}^{n} \Pi_{j=1}^{m} p_{ij}^{y_{ij}}
 \end{aligned}
 $$
 
-Since we have calculated y in exercise 2, we proceed to implementing the multinomial logit likelihood. We also merge choicePrice data frame and demos data frame here.
+Since we have calculated y in exercise 2, we proceed to implementing the multinomial logit likelihood. We also merge choicePrice and demos dataframes here.
 
 ```{r}
 #Merging Data to Put Choice and Income in One Data Frame
@@ -458,6 +454,8 @@ $\beta_{Income_{10}}$: It is more likely for an individual to choose choice 10 t
 
 # Exercise4
 
+## First Model
+
 For conditional logit, the marginal effect is computed as the following.
 
 ```{r}
@@ -519,7 +517,14 @@ kable(cond_marg_df[,6:10], digits = 4, caption =
 ```
 
 ## Interpretation
-Each increase in price decreases the probability of choosing jth choice but increases the probability of choosing non-jth choice.
+
+Since there are multiple coefficients in the matrix, we provide general interpretations for main-diagonal elements and off-diagonal elements. \newline
+
+Main-diagonal elements: Each unit increase in the price of $j^{th}$ choice decreases the probability of consumers choosing the $j^{th}$ choice. For example, if the price of the first choice increases, the probability of consumers choosing the first choice decreases by 1.23%. (Note that the magnitude of probability change depends on the $j^{th}$ choice) 
+
+Off-diagonal element: Each unit increase in the price of $j^{th}$ choice increases the probability of consumers choosing non-$j^{th}$ choices. For example, if the price of the first choice increases, the probability of consumers choosing the second choice increases by .3 \%, the third choice by .1235 \%, etc. (Note that the magnitude of probability change depends on the $j^{th}$ choice and non-$j^{th}$ choice)
+
+## Second Model
 
 For multinomial logit, the marginal effect is calculated as the following.
 
@@ -577,7 +582,25 @@ kable(multi_mar_df, digits = 4, col.names = "Average Marginal Effect",
 
 ## Interpretaion
 
-Each one-unit increase in income changes the probability of selecting jth choice by the given magnitude.
+-8e-04: On average, each unit increase in income decreases the probability of selecting the first choice by 8e-04. \newline
+
+-3e-04: On average, each unit increase in income decreases the probability of selecting the second choice by 3e-04. \newline
+
+-1e-04: On average, each unit increase in income decreases the probability of selecting the third choice by 1e-04. \newline
+
+-3e-04: On average, each unit increase in income decreases the probability of selecting the four choice by 3e-04. \newline
+
+-2e-04: On average, each unit increase in income decreases the probability of selecting the fifth choice by 2e-04. \newline
+
+0e+00: On average, each unit increase in income does not change the probability of selecting the six choice. \newline
+
+-1e-04: On average, each unit increase in income decreases the probability of selecting the seventh choice by 1e-04. \newline
+
+-1e-04: On average, each unit increase in income decreases the probability of selecting the eighth choice by 1e-04. \newline
+
+-1e-04: On average, each unit increase in income decreases the probability of selecting the ninth choice by 1e-04. \newline
+
+0e+00: On average, each unit increase in income does not change the probability of selecting the tenth choice. \newline
 
 
 # Exercise5
