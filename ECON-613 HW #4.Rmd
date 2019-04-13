@@ -73,10 +73,12 @@ panel5 = data %>%
   summarise(Size = n())
 
 kable(panel5, 
-      caption = "Table of Number of Time 5 Randomly Selected Individuals Showed Up in Data")
+      caption = "Frequency of 5 Randomly Selected Individuals Showed Up in Data")
 ```
 
-Table of Number of Time 5 Randomly Selected Individuals Showed Up in Data shows that the dataset is unbalanced panel data.
+### Comments:
+
+I have represented the panel dimension of wages for 5 randomly selected individuals by a graph and a table. The graph is designed to present how the wage, in log units, is changing over time trend for each of the five inidividuals. The table is included to imply that the the panel data is unbalanced.
 
 # Exercise 2 Random Effects
 
@@ -94,14 +96,14 @@ kable(randlm_coef, digits = 4,
 
 ### Comment
 
-$\hat{\beta}_{intercept} = 0.7942$: When education and potential experience are 0, log wage will be 0.7942. This quantity, however, is meaningless since no individuals are legally permitted to have 0 units of education. \newline
+$\hat{\beta}_{intercept} = 0.5668$: When education and potential experience are 0, log wage will be 0.5668. This quantity, however, is meaningless since no individuals are legally permitted to have 0 units of education. \newline
 
-$\hat{\beta}_{EDUC} = 0.0939$: Ceteris paribus, a one unit increase in education will increase log wage by 0.0939 on average. \newline
+$\hat{\beta}_{EDUC} = 0.1077$: Ceteris paribus, one unit increase in education will increase log wage by 0.1077 on average. \newline
 
-$\hat{\beta}_{POTEXPER} = 0.0374$: Ceteris paribus, a one unit increase in potential experience will increase log wage by 0.0374 on average. \newline
+$\hat{\beta}_{POTEXPER} = 0.0388$: Ceteris paribus, one unit increase in potential experience will increase log wage by 0.0388 on average. \newline
 
 
-# Exercise 3
+# Exercise 3 Fixed Effects Model
 
 ## Between Estimator
 
@@ -181,13 +183,19 @@ kable(coef_data, digits = 4,
 
 Comparison of $\hat{\beta}_{education}$'s:
 
-We observe that $\hat{\beta}_{between}$, $\hat{\beta}_{within}$, and $\hat{\beta}_{first}$ are all positive. Each model believes that a unit increase in education will increase wage (or log wage). The "within" model has the largest magnitude, while the "first-difference" model has the smallest magnitude.
+We observe that $\hat{\beta}_{between}$, $\hat{\beta}_{within}$, and $\hat{\beta}_{first}$ are all positive. Each model believes that a unit increase in education will increase wage (or log wage). The "within" model has the largest coefficient magnitude, while the "first-difference" model has the smallest coefficient magnitude. \newline
 
 Comparison of $\hat{\beta}_{POTEXPER}$'s:
 
-Similar to education, we observe that $\hat{\beta}_{between}$, $\hat{\beta}_{within}$, and $\hat{\beta}_{first}$ are all positive. Each model believes that a unit increase in potential experience will increase wage (or log wage).. The "within" model has the largest magnitude, while the "between" model has the smallest magnitude.
+Similar to education, we observe that $\hat{\beta}_{between}$, $\hat{\beta}_{within}$, and $\hat{\beta}_{first}$ are all positive. Each model believes that a unit increase in potential experience will increase wage (or log wage).. The "within" model has the largest coefficient magnitude, while the "between" model has the smallest coefficient magnitude.
 
-# Exercise 4
+# Exercise 4 Understanding Fixed Effects
+
+## 4.1
+
+The following R chunk contains codes for writing and optimizing the log likelihood associated to the problem. The log likelihood, however, provides different answers depending on the initialized parameter values, suggesting a non-convering likelihood. \newline
+
+I have investigated into the matter of non-convergence individually and collectively, with classmates and a TA, to fix the problem. But, I unfortunately was not able to fix it. 
 
 ```{r}
 #Randomly Selecting 100 Indices
@@ -196,8 +204,24 @@ ind100 = sample(x = 1:uniq_ID, size = 100, replace = FALSE)
 #Extracting Dataframe Associated with 100 Indices
 data_ex4 = data %>% filter(PERSONID %in% ind100)
 
+#Defining X and Y
 x_ex4 = data_ex4 %>% select(EDUC, POTEXPER)
 y_ex4 = data_ex4 %>% select(LOGWAGE)
+
+#Initializing Intercepts
+alphas = rep(0, 100)
+init_intercept = list()
+
+freq = rep(NA, 100)
+
+for(i in 1:100){
+  
+  freq[i] = data %>% filter(PERSONID == ind100[i]) %>% nrow()
+  init_intercept[[i]] = rep(alphas[i], freq[i])
+  
+}
+
+init_intercept = init_intercept %>% unlist()
 
 #Writing ML
 normal_ML = function(parm){
@@ -206,17 +230,16 @@ normal_ML = function(parm){
   Y = y_ex4 %>% as.matrix()
   
   #Adding Intercept Column
-  X = cbind(1, x_ex4) %>% as.matrix()
+  X = x_ex4 %>% as.matrix()
   
   #Calculating XB
-  XB = X %*% parm[1:3]
+  XB = parm[1:100] + X %*% parm[101:102]
   
-  #Conditional Variance
-  s = (parm[4])^2
+  #Normalizing the Quantity
+  normal_Y = (Y - XB) / parm[103]
   
-  #Calculating Likelihood
-  lik =
-    prod( (2 * pi * cond_var)^(1/2) * exp( -(Y - XB)^2 / (2 * s)) )
+  #Likelihood
+  lik = prod( dnorm(normal_Y) )
   
   #Returning the Likelihood
   return(lik)
@@ -229,22 +252,32 @@ normal_logML = function(parm){
   #Converting Y into Matrix
   Y = y_ex4 %>% as.matrix()
   
-  #Intercept Column
-  X_inter = matrix(1, nrow = nrow(x_ex4), ncol = 100)
-  
   #Adding Intercept Column
-  X = cbind(X_inter, x_ex4) %>% as.matrix()
+  X = x_ex4 %>% as.matrix()
+  
+  #Initializing Intercepts
+  init_intercept = list()
+
+  freq = rep(NA, 100)
+
+  for(i in 1:100){
+  
+    freq[i] = data %>% filter(PERSONID == ind100[i]) %>% nrow()
+    init_intercept[[i]] = rep(parm[i], freq[i])
+  
+  }
+
+  init_intercept = init_intercept %>% unlist()
   
   #Calculating XB
-  XB = X %*% parm[1:102]
+  XB = init_intercept + X %*% parm[101:102]
   
-  #Variance
-  var = (parm[103])^2
+  #Normalizing the Quantity
+  normal_Y = (Y - XB) / parm[103]
   
   #Calculating Log Likelihood
   log_lik = 
-    sum( -(1/2) * ( log(2 * pi) + log(var) ) - 
-           (1/2) * (Y - XB)^2 / var )
+    sum( dnorm(normal_Y, log = TRUE) )
   
   #Returning the Negative of the Log Likelihood
   return(-log_lik)
@@ -252,12 +285,67 @@ normal_logML = function(parm){
 }
 
 
+#Optimizing Log Likelihood
+parm = rnorm(103)
+opt = optim(par = parm, fn = normal_logML) 
+kable(data.frame(unique(data_ex4$PERSONID)[1:10], opt$par[1:10]),
+      digits = 4,
+      col.names = c("PERSONID","Fixed Effect"),
+      caption = "Table of Individual Fixed Effect Parameter")
 ```
+
+### Comment
+
+The table only presents the first 10 fixed-effect coefficients. I thought of presenting all the coefficients in the table, but I noticed that doing such will yield a table of coefficients that is three pages long. To look at the rest of fixed-effect coefficients, please run the code opt$par. \newline
+
+## 4.2
 
 Here, we are running a regression to estimate individual fixed effects on the invariant variables.
 
 ```{r}
-colnames(data_ex4)
-lm(LOGWAGE ~ ABILITY + MOTHERED + FATHERED + BRKNHOME + SIBLINGS, data = data_ex4)
+#Creating Dataframe for the Regression
+data_ex4.2 = data.frame(
+  
+  opt$par[1:100],
+  data_ex4 %>% select(PERSONID, ABILITY) %>% unique(),
+  data_ex4 %>% select(PERSONID, MOTHERED) %>% unique(),
+  data_ex4 %>% select(PERSONID, FATHERED) %>% unique(),
+  data_ex4 %>% select(PERSONID, BRKNHOME) %>% unique(),
+  data_ex4 %>% select(PERSONID, SIBLINGS) %>% unique()
+  
+)
+colnames(data_ex4.2)[1] = "Opt"
+
+#Calculating the Coefficients
+fixed_model = lm(Opt ~  ABILITY + 
+                  MOTHERED + FATHERED +
+                  BRKNHOME + SIBLINGS, 
+                data = data_ex4.2)
+
+fixed_coef = fixed_model %>%
+  coefficients()
+
+#Presenting Coefficients
+kable(fixed_coef, digits = 4, col.names = "Coefficients", 
+      caption = "Table of Coefficients")
 ```
+
+## 4.3
+
+The standard errors in the previous problem may not be correctly estimated because of a potentital heteroskedasticity in the model - panel data may suffer from a non-constant variance with respect to time. Fortunately, this issue can be fixed by calculating heteroskedasticity-consistent standard errors (or Eicker–Huber–White standard errors). In the following, I use the package "ivpack" to calculate the Huber-White standard errors. 
+
+```{r}
+#Installing the Package ivpack
+install.packages("ivpack")
+
+#Fitting Fixed Effects Model in Exericse 4
+ex_4_model = lm(LOGWAGE ~ - 1 + factor(PERSONID) + EDUC + POTEXPER, data = data_ex4)
+
+#Calculating Huber-White Standard Errors
+HW_sd = ivpack::robust.se(ex_4_model)[ c("EDUC", "POTEXPER") , "Std. Error"] %>% as.data.frame()
+
+kable(HW_sd, digits = 4, col.names = "Standard Error",
+      caption = "Table of Huber-White Standard Errors")
+```
+
 
