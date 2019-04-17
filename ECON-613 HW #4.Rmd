@@ -62,7 +62,7 @@ ggplot() +
   labs(
     x = "Time Trend",
     y = "Wage (in log units)",
-    title = "5 Randomly Selected Individuals' Wages in Time"
+    title = "5 Randomly Selected Individuals' Wages Over Time"
   ) +
   theme_bw()
 
@@ -300,13 +300,17 @@ The table only presents the first 10 fixed-effect coefficients. I thought of pre
 
 ## 4.2
 
-Here, we are running a regression to estimate individual fixed effects on the invariant variables.
+Here, we are running a regression to estimate the individual fixed effects on the invariant variables. Since the log likelihood did not converge in the previous problem, we run OLS to estimate the estimate the individual fixed effects first. 
 
 ```{r}
+fixed_effects = lm(LOGWAGE ~ -1 + factor(PERSONID) + EDUC + POTEXPER, data = data_ex4) %>% 
+  coefficients() %>%
+  .[1:100]
+
 #Creating Dataframe for the Regression
 data_ex4.2 = data.frame(
   
-  opt$par[1:100],
+  fixed_effects,
   data_ex4 %>% select(PERSONID, ABILITY) %>% unique(),
   data_ex4 %>% select(PERSONID, MOTHERED) %>% unique(),
   data_ex4 %>% select(PERSONID, FATHERED) %>% unique(),
@@ -314,12 +318,12 @@ data_ex4.2 = data.frame(
   data_ex4 %>% select(PERSONID, SIBLINGS) %>% unique()
   
 )
-colnames(data_ex4.2)[1] = "Opt"
+colnames(data_ex4.2)[1] = "Fixed_Effects"
 
 #Calculating the Coefficients
-fixed_model = lm(Opt ~  ABILITY + 
+fixed_model = lm(Fixed_Effects ~  ABILITY + 
                   MOTHERED + FATHERED +
-                  BRKNHOME + SIBLINGS, 
+                  BRKNHOME + SIBLINGS,
                 data = data_ex4.2)
 
 fixed_coef = fixed_model %>%
@@ -332,20 +336,68 @@ kable(fixed_coef, digits = 4, col.names = "Coefficients",
 
 ## 4.3
 
-The standard errors in the previous problem may not be correctly estimated because of a potentital heteroskedasticity in the model - panel data may suffer from a non-constant variance with respect to time. Fortunately, this issue can be fixed by calculating heteroskedasticity-consistent standard errors (or Eicker–Huber–White standard errors). In the following, I use the package "ivpack" to calculate the Huber-White standard errors. 
+The standard errors in the previous problem may not be correctly estimated because of measurement errors. When we regress the fixed effects $\hat{\alpha}_{1:100}$ on the invariant variables in the previous problem, we implicitly assume that the $\hat{\alpha}$'s are without measurement errors. This, however, is a false statement because when the fixed effects are estimated in the first regression in the first part of exercise 4, it is estimated with measurement errors. For this reason, we opt to bootstrap to correctly estimate the standard errors.
 
 ```{r}
-#Installing the Package ivpack
-install.packages("ivpack")
+iter = 49
+beta_matrix = matrix(NA, nrow = iter, ncol = 6)
 
-#Fitting Fixed Effects Model in Exericse 4
-ex_4_model = lm(LOGWAGE ~ - 1 + factor(PERSONID) + EDUC + POTEXPER, data = data_ex4)
+for(i in 1:iter){
+  
+  #Resampling Indices
+  samp = sample(x = ind100, size = 100, replace = TRUE)
+  
+  #Sampling Individuals with Resampled Indices
+  boot_df_samp = data.frame()
+  
+  for(j in 1:100){
+    
+    boot_df_samp = rbind( boot_df_samp, filter(data, PERSONID == samp[j]) )
+    
+  }
+  
+  #Estimating Fixed Effects (Alphas)
+  boot_fixed_effects = 
+    lm(LOGWAGE ~ -1 + EDUC + POTEXPER + factor(PERSONID), data = boot_df_samp) %>% 
+    coefficients() %>%
+    .[-c(1, 2)]
+  
+  #Subsetting Invariant Variables
+  boot_invariant = boot_df_samp %>% 
+    group_by(PERSONID) %>%
+    select(PERSONID, ABILITY, MOTHERED, FATHERED, BRKNHOME, SIBLINGS) %>% 
+    unique() %>%
+    arrange(PERSONID)
+  
+  #Creating Dataframe for Second Regression
+  boot_df = data.frame(
+    
+    PERSONID = boot_invariant$PERSONID,
+    fixed_effects = boot_fixed_effects,
+    ABILITY = boot_invariant$ABILITY,
+    MOTHERED = boot_invariant$MOTHERED,
+    FATHERED = boot_invariant$FATHERED,
+    BRNKHOME = boot_invariant$BRKNHOME,
+    SIBLINGS = boot_invariant$SIBLINGS
+    
+  )
+  
+  #Regressing Fixed Effects on Invariant Variables
+  beta_matrix[i, ] = lm(fixed_effects ~ ABILITY + MOTHERED + FATHERED + BRNKHOME + SIBLINGS,
+                 data = boot_df) %>%
+    coefficients()
+  
+  
+}
 
-#Calculating Huber-White Standard Errors
-HW_sd = ivpack::robust.se(ex_4_model)[ c("EDUC", "POTEXPER") , "Std. Error"] %>% as.data.frame()
+#Calculating Bootstrap Standard Errors
+boot_sd = apply(beta_matrix, 2, sd) %>% as.data.frame()
+colnames(boot_sd) = "Bootstrap SE"
+rownames(boot_sd) = c("Intercept", "ABILITY", "MOTHERED", "FATHERED", "BRNKHOME", "SIBLINGS")
 
-kable(HW_sd, digits = 4, col.names = "Standard Error",
-      caption = "Table of Huber-White Standard Errors")
+#Presenting the Bootstrap Standard Errors
+kable(boot_sd, digits = 4,
+      caption = "Table of Bootstrap Standard Errors")
 ```
 
 
