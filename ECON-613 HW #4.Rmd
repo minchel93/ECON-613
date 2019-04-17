@@ -76,7 +76,7 @@ kable(panel5,
       caption = "Frequency of 5 Randomly Selected Individuals Showed Up in Data")
 ```
 
-### Comments:
+### Comment:
 
 I have represented the panel dimension of wages for 5 randomly selected individuals by a graph and a table. The graph is designed to present how the wage, in log units, is changing over time trend for each of the five inidividuals. The table is included to imply that the the panel data is unbalanced.
 
